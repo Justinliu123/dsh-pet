@@ -60,7 +60,7 @@ Object.assign(PetSprite.prototype, {
       this.syncInputBusy();
       return;
     }
-    // 气泡单槽：同一时刻只显示一个（优先级：终态任务 > 碎碎念/对话 > 余额 > 非终态任务）。
+    // 气泡单槽：同一时刻只显示一个（优先级：提醒确认 > 点击编排的余额 > 终态任务 > 碎碎念/对话 > 自动余额 > 环境 > 非终态任务）。
     // 终态任务不让位：完成/失败气泡只活 10s，被顶掉就彻底看不到；非终态气泡常驻，让位零损失。
     // 工作气泡与碎碎念同款样式（宽度自适应 + 自动换行）；配图标记交给 CSS（带图时取消 min-width）。
     // 图片 URL 与视频同规则：传 BASE 前缀（桌面是 file:// 页面，必须绝对地址），素材根同理。
@@ -69,18 +69,26 @@ Object.assign(PetSprite.prototype, {
     const balanceOn = !!(this.bubbleOn && this.balanceView);
     const envOn = !!(this.envOn && this.envState);
     const workTerminal = this.workState === 'success' || this.workState === 'error';
+    // 等待确认（ask_user_question 等人）：用户不点流程就卡住，优先级最高。
+    const workWaiting = this.workState === 'waiting';
+    // 点击编排的余额气泡只活 10s，被自动轮询顶掉=「点了没反应」，所以排在任务状态与碎碎念前面。
+    const balanceClicked = balanceOn && this.balanceManual === true;
     const slot =
-      workTerminal && workOn
+      workWaiting && workOn
         ? 'work'
-        : whisperOn
-          ? 'whisper'
-          : balanceOn
-            ? 'balance'
-            : envOn
-              ? 'env'
-              : workOn
-                ? 'work'
-                : 'none';
+        : balanceClicked
+          ? 'balance'
+          : workTerminal && workOn
+            ? 'work'
+            : whisperOn
+              ? 'whisper'
+              : balanceOn
+                ? 'balance'
+                : envOn
+                  ? 'env'
+                  : workOn
+                    ? 'work'
+                    : 'none';
     // 记住当前槽位：点击处理在 init.js，必须知道「现在显示的是哪一种气泡」才能分清翻页与跳会话。
     this.bubbleSlot = slot;
     // 配图两种形态二选一：url 用完整地址，image 按素材根拼表情包路径；样式/class 共用。
@@ -149,7 +157,9 @@ Object.assign(PetSprite.prototype, {
       // 展开态的行在这里现算：renderBubble 是只读渲染路径，不缓存（余额每轮都在变，缓存反而要同步失效）
       // 每页内容与页数同源（S.balancePageView / S.balancePageCount）：不再按「index>0 即窗口明细」二分化，
       // 否则新增的用量页会和明细挤在同一页。没有读数时回落到缓存的首屏行。
-      const rows = this.balanceState ? S.balancePageView(this.balanceState, this.balanceViewIndex) : this.balanceView;
+      const rows = this.balanceState
+        ? S.balancePageView(this.balanceState, this.balanceViewIndex, this.bubblePages())
+        : this.balanceView;
       const hasTier = rows.some((r) => r.role === 'tier');
       if (hasTier) {
         // deepseek 余额单行：余额（峰/谷）¥x — 档位字着色

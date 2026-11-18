@@ -86,3 +86,30 @@ test('组合视图：账户余额 + 窗口额度才有峰谷页，纯窗口服�
   if (!windowsOnly || !windowsOnly.ok) throw new Error('unreachable');
   assert.equal(balancePageCount(windowsOnly), 2, '纯窗口服务商不出现峰谷页');
 });
+
+test('编排开关：关明细/关峰谷后页数与内容同源，翻到末页不出空白', () => {
+  const combined = toBalanceState({
+    ok: true,
+    provider: 'deepseek-account',
+    shape: 'windows',
+    data: {
+      weekly: 3,
+      account: { wallets: [{ currency: 'CNY', total: '11.44', granted: '0', toppedUp: '11.44' }], tier: 'peak' },
+    },
+  });
+  assert.ok(combined && combined.ok);
+  if (!combined || !combined.ok) throw new Error('unreachable');
+
+  // 关掉峰谷页：只剩收起 + 明细，第 2 页（越界）停在明细，不返回空数组
+  assert.equal(balancePageCount(combined, { pricing: false }), 2);
+  const noPricing = balancePageView(combined, 5, { pricing: false });
+  assert.ok(noPricing.length > 0);
+  assert.doesNotMatch(String(noPricing[0]?.text), /高峰时段|空闲时段/);
+  assert.match(String(noPricing[0]?.text), /已用|余额|额度|重置/);
+
+  // 关掉明细（峰谷一起关）：只剩收起一页，翻页越界也停在收起态
+  assert.equal(balancePageCount(combined, { detail: false, pricing: false }), 1);
+  const noDetail = balancePageView(combined, 3, { detail: false, pricing: false });
+  assert.ok(noDetail.length > 0);
+  assert.doesNotMatch(String(noDetail[0]?.text), /高峰时段|空闲时段/);
+});

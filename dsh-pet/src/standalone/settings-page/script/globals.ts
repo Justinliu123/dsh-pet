@@ -10,7 +10,32 @@
 export function globalsScript(): string {
   return `
 function globalCards() {
-  return [globalFlagsCard, voiceCard, fontCard, physicsCard, motionCard, modelCard, memoryCard, environmentCard, advancedCard];
+  return [globalFlagsCard, voiceCard, physicsCard, motionCard, modelCard, memoryCard, environmentCard, advancedCard];
+}
+
+/** 「气泡」分区：外观字号 + 点击编排。两者都写 main 条目的全局字段，各有自己的保存按钮。 */
+function bubbleCards() {
+  return [fontCard, bubbleClickCard];
+}
+
+/** 编排开关：只决定点击序列里放不放「窗口明细」「峰谷价目」两页；首页永远是余额收起态。 */
+function setBubblePage(key, value) {
+  const pages = state.globals.bubbleClickPages || { detail: true, pricing: true };
+  state.globals.bubbleClickPages = Object.assign({ detail: true, pricing: true }, pages, { [key]: value });
+  markDirty(true);
+}
+
+function bubbleClickCard() {
+  const pages = state.globals.bubbleClickPages || { detail: true, pricing: true };
+  return card(
+    '点击编排',
+    '点一下宠物本体依次弹这几页，再点推进，末页再点收起（10 秒不动也会自己收）。首页固定是余额/额度/今日已用；下面两页可以关掉。',
+    [
+      make('p', { class: 'fieldHint', text: '1. 余额 / 额度 / 今日已用（固定）' }),
+      toggleRow('g-bubble-detail', '第 2 页：窗口明细', '5h 与周额度各自还剩多少、什么时候重置；服务商给了区间用量时，用量页跟在它后面。', pages.detail !== false, (value) => setBubblePage('detail', value)),
+      toggleRow('g-bubble-pricing', '第 3 页：峰谷价目', 'DeepSeek 单价（命中/未命中/输出）与距下次峰谷切换的倒计时；只有同时有 DeepSeek 账户余额与窗口额度时才出现。', pages.pricing !== false, (value) => setBubblePage('pricing', value)),
+    ],
+  );
 }
 
 function setGlobal(key, value) {

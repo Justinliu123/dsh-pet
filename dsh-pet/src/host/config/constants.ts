@@ -52,6 +52,7 @@ export const GLOBAL_DEFAULT_KEYS = [
   'physics',
   'animationWeights',
   'font',
+  'bubbleClickPages',
   'confineToScreen',
   'voiceEnabled',
   'voiceName',

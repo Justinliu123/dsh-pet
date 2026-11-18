@@ -6,7 +6,7 @@
  * 图标走设置页自己的公开资源路径（/standalone-ai/icon.png），内容读自包内 assets/logo.png，
  * 不复制第二份图；不能用插件路由 /logo——浏览器取 favicon 不带 Origin 也不带令牌，会被判成文件来源而 403。
  * 导航项以 `data-tab` 声明，脚本按约定找 `panel-<tab>`，新增分区只需照此加一对按钮与面板。
- * 桌宠配置与 AI 配置必须分成两个分区：两块各有独立的保存动作，合在一起容易点错保存按钮。
+ * 桌宠配置、气泡编排与 AI 配置必须分成独立分区：每块各有自己的保存动作，合在一起容易点错保存按钮。
  * @module dsh-pet/src/standalone/settings-page/chrome
  */
 
@@ -21,6 +21,7 @@ export const settingsPage = `<!doctype html>
 <nav class="nav" aria-label="设置分区"><div class="navList" role="tablist">
 <button type="button" class="navCell" role="tab" id="tab-chat" data-tab="chat" data-title="对话" aria-controls="panel-chat" aria-selected="true"><svg class="navGlyph" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 3.4h10a1.1 1.1 0 0 1 1.1 1.1v5.6A1.1 1.1 0 0 1 13 11.2H8.2L5 13.6v-2.4H3a1.1 1.1 0 0 1-1.1-1.1V4.5A1.1 1.1 0 0 1 3 3.4Z" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg><span class="navLabel">对话</span></button>
 <button type="button" class="navCell" role="tab" id="tab-pet" data-tab="pet" data-title="桌宠" aria-controls="panel-pet" aria-selected="false"><svg class="navGlyph" viewBox="0 0 16 16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5.4 5.6a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4M10.6 5.6a1.2 1.2 0 1 0 0-2.4 1.2 1.2 0 0 0 0 2.4M3.6 9a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2M12.4 9a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2"/><path d="M8 12.6c-1.9 0-3.2-1-3.2-2.3 0-1.4 1.3-2.7 3.2-2.7s3.2 1.3 3.2 2.7c0 1.3-1.3 2.3-3.2 2.3Z"/></g></svg><span class="navLabel">桌宠</span></button>
+<button type="button" class="navCell" role="tab" id="tab-bubble" data-tab="bubble" data-title="气泡" aria-controls="panel-bubble" aria-selected="false"><svg class="navGlyph" viewBox="0 0 16 16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M2.4 3.2h11.2v6.4H7.6L4.4 12v-2.4H2.4Z"/><path d="M5 6.2h6M5 8.2h3.6" stroke-linecap="round"/></g></svg><span class="navLabel">气泡</span></button>
 <button type="button" class="navCell" role="tab" id="tab-ai" data-tab="ai" data-title="AI 服务" aria-controls="panel-ai" aria-selected="false"><svg class="navGlyph" viewBox="0 0 16 16" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"><path d="M8 2.6 9.1 6l3.4 1.1-3.4 1.1L8 11.6 6.9 8.2 3.5 7.1 6.9 6Z"/><path d="M12.2 10.6l.5 1.5 1.5.5-1.5.5-.5 1.5-.5-1.5-1.5-.5 1.5-.5Z"/></g></svg><span class="navLabel">AI 服务</span></button>
 </div></nav>
 <div class="sideFoot">独立模式</div>
@@ -32,6 +33,12 @@ export const settingsPage = `<!doctype html>
 <div class="scroll">
 <div id="pet-cards"><p class="empty">正在读取本机配置…</p></div>
 <div class="footer"><p class="status" id="pet-status" role="status" aria-live="polite"></p><button class="btn primary" id="pet-save" type="button" disabled>保存桌宠设置</button></div>
+</div>
+</section>
+<section class="panel" id="panel-bubble" role="tabpanel" aria-labelledby="tab-bubble" hidden>
+<div class="scroll">
+<div id="bubble-cards"><p class="empty">正在读取本机配置…</p></div>
+<div class="footer"><p class="status" id="bubble-status" role="status" aria-live="polite"></p><button class="btn primary" id="bubble-save" type="button" disabled>保存气泡设置</button></div>
 </div>
 </section>
 <section class="panel" id="panel-ai" role="tabpanel" aria-labelledby="tab-ai" hidden>

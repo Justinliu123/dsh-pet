@@ -77,34 +77,55 @@ export function pricingPageAvailable(state: BalanceState): boolean {
   return (state.accountWallets?.length ?? 0) > 0;
 }
 
-/**
- * 余额气泡的可翻页数：不可用只有一页说明；windows 至少两页（收起态 + 窗口明细），
- * 服务商给了区间用量就多一页；custom 以节点树页数为准，其余形态点开没有新内容。
- * 组合视图（DeepSeek 账户 + 窗口额度）在末尾再多一页峰谷价目。
- *
- * 页数与 {@link balancePageView} 必须同源：两边各判一次就会翻出一页空白。
- */
-export function balancePageCount(state: BalanceState): number {
-  if (!state.ok) return 1;
-  if (state.shape === 'custom') return Math.max(1, customViews(state)?.length ?? 1);
-  if (state.shape !== 'windows') return 1;
-  return (state.usage ? 3 : 2) + (pricingPageAvailable(state) ? 1 : 0);
+/** 点击编排里可关掉的页（设置页「气泡」分区写的就是它）。
+ *  关闭只是不放进翻页序列，收起态（第一页）永远保留；custom 形态各页对等，不受这里影响。 */
+export interface BubblePageOptions {
+  /** 是否保留「窗口明细」页（含区间用量页）。缺键按 true。 */
+  readonly detail?: boolean;
+  /** 是否保留「峰谷价目」页。缺键按 true。 */
+  readonly pricing?: boolean;
+}
+
+/** windows 形态按编排选项算出来的页序列：第 0 页永远是收起态。
+ *  明细与用量是一体的（用量页挂在明细后面），关掉明细时用量也一起去掉，避免翻页跳空。 */
+function windowPageKinds(state: BalanceState, options: BubblePageOptions): Array<'summary' | 'detail' | 'usage' | 'pricing'> {
+  const kinds: Array<'summary' | 'detail' | 'usage' | 'pricing'> = ['summary'];
+  if (options.detail !== false) {
+    kinds.push('detail');
+    if (state.ok && state.usage) kinds.push('usage');
+  }
+  if (options.pricing !== false && pricingPageAvailable(state)) kinds.push('pricing');
+  return kinds;
 }
 
 /**
- * 指定页的气泡行数据：windows 下 0 为收起态、1 为窗口明细、2 为区间用量，
- * 组合视图的最后一页是峰谷价目。
+ * 余额气泡的可翻页数：不可用只有一页说明；windows 按编排选项（默认收起态 + 明细 + 峰谷），
+ * custom 以节点树页数为准，其余形态点开没有新内容。
  *
- * 越界页回落到最后一页有内容的页，不返回空数组——空白气泡比停在前一页更像坏了。
+ * 页数与 {@link balancePageView} 必须同源：两边各判一次就会翻出一页空白。
  */
-export function balancePageView(state: BalanceState, page: number): BalanceBubbleRow[] {
+export function balancePageCount(state: BalanceState, options: BubblePageOptions = {}): number {
+  if (!state.ok) return 1;
+  if (state.shape === 'custom') return Math.max(1, customViews(state)?.length ?? 1);
+  if (state.shape !== 'windows') return 1;
+  return windowPageKinds(state, options).length;
+}
+
+/**
+ * 指定页的气泡行数据：按编排选项取对应页；越界页回落到最后一页有内容的页，
+ * 不返回空数组——空白气泡比停在前一页更像坏了。
+ */
+export function balancePageView(state: BalanceState, page: number, options: BubblePageOptions = {}): BalanceBubbleRow[] {
   if (!state.ok) return unavailableRows(state);
   const handler = HANDLERS[state.shape];
   if (state.shape !== 'windows' || page <= 0) return handler.rows(state);
-  const basePages = state.usage ? 3 : 2;
-  if (page >= basePages && pricingPageAvailable(state)) return pricingRows();
-  if (page === 1 || !state.usage) return balanceDetailView(state);
-  return handler.usage?.(state) ?? balanceDetailView(state);
+  const kinds = windowPageKinds(state, options);
+  // 越界就停在最后一页（末页再点是收起的语义在调用方，这里只保证有内容）。
+  const kind = kinds[Math.min(Math.max(page, 0), kinds.length - 1)];
+  if (kind === 'pricing') return pricingRows();
+  if (kind === 'detail') return balanceDetailView(state);
+  if (kind === 'usage') return handler.usage?.(state) ?? balanceDetailView(state);
+  return handler.rows(state);
 }
 
 // 自定义气泡（custom 形态）走节点树这条并行通道：行数据由插件定好长什么样，只填文案；

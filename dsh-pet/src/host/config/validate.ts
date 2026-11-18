@@ -142,6 +142,16 @@ export function fontValid(value: unknown): boolean {
   return typeof f.followPet === 'boolean';
 }
 
+/** bubbleClickPages 段校验：只允许 detail / pricing 两个布尔子键（缺键合法，消费端按 true）。
+ *  多余子键不算非法——顺手忽略；但子键类型写错即整段非法（告警 + 取默认）。 */
+export function bubbleClickPagesValid(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const pages = value as Record<string, unknown>;
+  if (pages.detail !== undefined && typeof pages.detail !== 'boolean') return false;
+  if (pages.pricing !== undefined && typeof pages.pricing !== 'boolean') return false;
+  return true;
+}
+
 /** 长期记忆段校验：provider 非空、powercontext 三项齐全且合法。
  *  与 font 同口径：整段校验——provider 缺失或任一子键非法即整段非法（告警 + 取默认），不逐子键补默认。
  *  provider 只判形态（存在性由运行时解析时判），endpoint 只判协议前缀（能不能连上是运行时的事）。 */
@@ -250,6 +260,8 @@ export function topFieldValid(key: string, value: unknown): boolean {
       return physicsValid(value);
     case 'font':
       return fontValid(value);
+    case 'bubbleClickPages':
+      return bubbleClickPagesValid(value);
     case 'whisperModel':
     case 'chatModel':
       return modelSelectionValid(value);

@@ -72,6 +72,11 @@ function pickGlobals(main) {
     voiceNotifyEnabled: source.voiceNotifyEnabled === true,
     physics: Object.assign({}, FALLBACK_PHYSICS, source.physics || {}),
     font: Object.assign({}, FALLBACK_FONT, source.font || {}),
+    // 点击编排：缺键按全开（与消费端口径一致），只保存两个开关
+    bubbleClickPages: {
+      detail: !source.bubbleClickPages || source.bubbleClickPages.detail !== false,
+      pricing: !source.bubbleClickPages || source.bubbleClickPages.pricing !== false,
+    },
     chatMemoryRounds: Number.isFinite(Number(source.chatMemoryRounds)) ? Number(source.chatMemoryRounds) : 0,
     chatImageLimit: Number.isFinite(Number(source.chatImageLimit)) ? Number(source.chatImageLimit) : 0,
     animationWeights: pickWeights(source.animationWeights),
@@ -130,6 +135,36 @@ function renderPetsPanel() {
   }
 }
 
+/** 「气泡」分区：外观字号 + 点击编排，保存走同一条 PUT /config（main 条目）。 */
+function renderBubblePanel() {
+  const host = byId('bubble-cards');
+  if (!host) return;
+  host.textContent = '';
+  for (const builder of bubbleCards()) host.append(builder());
+}
+
+async function saveBubble() {
+  const status = byId('bubble-status');
+  const saveBtn = byId('bubble-save');
+  saveBtn.disabled = true;
+  setStatus(status, '正在保存…');
+  try {
+    let merged = await callApi('PUT', '/config', petsBody());
+    if (!merged || merged.ok === false) {
+      setStatus(status, (merged && (merged.message || merged.reason)) || '宿主拒绝了这次保存。', 'error');
+      return;
+    }
+    initDrafts(merged);
+    markDirty(false);
+    renderBubblePanel();
+    setStatus(status, '已保存到本机，桌宠与页面会立即按新设置渲染。', 'ok');
+  } catch (error) {
+    setStatus(status, error && error.message ? error.message : String(error), 'error');
+  } finally {
+    saveBtn.disabled = false;
+  }
+}
+
 /** 提交用的 physics 段：原配置没写过的可选键不带出去，避免保存时凭空补键。 */
 function physicsBody() {
   const out = Object.assign({}, state.globals.physics);
@@ -163,6 +198,7 @@ function petsBody() {
     environmentCity: state.globals.environmentCity || '',
     physics: physicsBody(),
     font: state.globals.font,
+    bubbleClickPages: state.globals.bubbleClickPages,
     chatMemoryRounds: state.globals.chatMemoryRounds,
     chatImageLimit: state.globals.chatImageLimit,
     animationWeights: state.globals.animationWeights,

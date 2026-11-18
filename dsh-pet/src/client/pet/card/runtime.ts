@@ -129,10 +129,12 @@ export function createCardRuntime(rt: PetRuntime) {
       assetRoot: cfg.assetRoot,
       balance,
       balanceEnabled: cfg.balanceEnabled,
+      ...(cfg.bubbleClickPages === undefined ? {} : { bubblePages: cfg.bubbleClickPages }),
       balanceManual,
       env: env ?? null,
       workStatusEnabled: cfg.workStatusEnabled,
       workTerminal: workStatus?.state === 'success' || workStatus?.state === 'error',
+      workWaiting: workStatus?.state === 'waiting',
       workSessionId: workStatus?.sessionId ?? null,
       ...(onFocusSession === undefined ? {} : { onFocusSession }),
     });

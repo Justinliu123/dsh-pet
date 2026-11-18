@@ -243,6 +243,8 @@ PetSprite.prototype.showBalanceNow = function showBalanceNow(state, manual) {
   const p = S.balancePercent(state);
   if (!manual && p === undefined && state.shape !== 'custom') return; // 自动轮询没有百分比语义：没有档位依据，不弹（手动仍要给答复）
   this.bubbleOn = true;
+  // 来源标记：手动（点宠物/点菜单）优先于任务状态与碎碎念，见 sprite/bubble.js 的槽位判定。
+  this.balanceManual = !!manual;
   this.balanceWrap = false; // 正常余额气泡用常规尺寸，别继承上一次文字说明的紧凑变体
   this.balanceView = S.balanceBubbleView(state);
   this.balanceState = state; // 展开态按页现算窗口明细与用量行（balanceView 只是收起态那两行）
@@ -297,6 +299,14 @@ PetSprite.prototype.toggleBalanceDetail = function toggleBalanceDetail() {
 
 // 点宠物本体：按「余额/额度/今日已用 → 窗口明细 → 峰谷价目」的顺序显示或推进编排气泡，
 // 末页再点收起。与 whale 挂件的冒泡编排同一手感：一次点击一页，不必去点气泡本身；点击动画与音效照旧。
+// 点击编排页设置：main 条目配置里的 bubbleClickPages（明细/峰谷两个开关），
+// 缺省全开——旧配置没有这个键时行为与以前一致。
+PetSprite.prototype.bubblePages = function bubblePages() {
+  const pages = this.pet && this.pet.bubbleClickPages;
+  if (!pages || typeof pages !== 'object') return {};
+  return { detail: pages.detail !== false, pricing: pages.pricing !== false };
+};
+
 PetSprite.prototype.clickBubbleSequence = function clickBubbleSequence() {
   const state = this.balanceState;
   if (!state || !state.ok) return; // 还没有可用结果：这一下只播点击动画（与旧行为一致）

@@ -1,7 +1,7 @@
 /**
  * 设置页启动：分区切换、初次加载与保存按钮接线。
  *
- * 桌宠与 AI 分成两个分区（各自一个保存按钮，避免点错）：桌宠读 /config，
+ * 桌宠、气泡与 AI 分成三个分区（各自一个保存按钮，避免点错）：桌宠与气泡读 /config，
  * AI 读 /standalone-ai/settings，两套加载与保存互不影响。
  * 缺令牌时只提示、不发任何请求——本页所有写操作都依赖那次运行有效的凭证。
  * @module dsh-pet/src/standalone/settings-page/script/boot
@@ -111,7 +111,9 @@ async function loadPets() {
     state.meta = meta;
     initDrafts(config);
     renderPetsPanel();
+    renderBubblePanel();
     byId('pet-save').disabled = false;
+    byId('bubble-save').disabled = false;
     setStatus(status, '');
   } catch (error) {
     setStatus(status, (error && error.message) || String(error), 'error');
@@ -138,6 +140,7 @@ function boot() {
   mountProtocolSelect();
   wireAiPanel();
   byId('pet-save').addEventListener('click', savePets);
+  byId('bubble-save').addEventListener('click', saveBubble);
   window.addEventListener('beforeunload', (event) => {
     if (!state.dirty) return;
     event.preventDefault();

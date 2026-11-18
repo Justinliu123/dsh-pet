@@ -139,6 +139,8 @@ export interface Pet {
   chatModel?: ModelSelection;
   /** 全局默认：字体（种类 / 字号 / 是否随宠物大小缩放） */
   font?: FontConfig;
+  /** 全局默认：点宠物本体时的气泡编排页（主页固定，明细/峰谷各一个开关） */
+  bubbleClickPages?: BubbleClickPages;
   /** 条目级：表情包清单（名称 → 给模型看的描述），合并器吹进每只实例、多实例共享。
    *  顺序即配置书写顺序，也就是 chatImageLimit 截取「前 N 张」的依据。 */
   memes?: Record<string, string>;
@@ -206,6 +208,16 @@ export interface FontConfig {
   size: number;
   /** 字号是否随宠物大小等比缩放：true = 按「实际 size / 基准尺寸」缩放（默认）；false = 恒为 size px */
   followPet: boolean;
+}
+
+/** 点击宠物本体时弹的气泡编排（全局一份，所有宠物共用；写 main 条目）。
+ *  首页固定是「余额/额度/今日已用」（点击后的第一眼要有内容），末页再点收起；
+ *  这里只决定后面要不要放「窗口明细」与「峰谷价目」两页。 */
+export interface BubbleClickPages {
+  /** 是否把「窗口明细」页放进点击编排（5h / 周额度与重置时间）。缺键按 true。 */
+  detail?: boolean;
+  /** 是否把「峰谷价目」页放进点击编排（DeepSeek 单价与切换倒计时）。缺键按 true。 */
+  pricing?: boolean;
 }
 
 /** config.jsonc 全集——运行时直接使用。 */

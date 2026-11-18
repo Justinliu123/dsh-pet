@@ -22,6 +22,8 @@ function input(overrides: Partial<BubbleSlotInput> = {}): BubbleSlotInput {
     balanceAvailable: true,
     balanceEnabled: true,
     balanceManual: false,
+    workWaiting: false,
+    balanceClicked: false,
     envOn: false,
     envAvailable: true,
     todoOn: false,
@@ -117,6 +119,87 @@ describe('decideBubbleSlot —— 同一时刻只挂一个气泡', () => {
       }),
     );
     assert.equal(slot, 'todo');
+  });
+});
+
+describe('decideBubbleSlot —— 提醒确认与点击编排要压过任务气泡', () => {
+  test('提醒确认（waiting）压过终态任务与碎碎念：不点确认流程就卡住', () => {
+    const slot = decideBubbleSlot(
+      input({
+        workWaiting: true,
+        workOn: true,
+        workText: '需要你确认一下呢',
+        workTerminal: true,
+        whisperOn: true,
+        whisperText: '在',
+        balanceOn: true,
+      }),
+    );
+    assert.equal(slot, 'work');
+  });
+
+  test('工作状态联动关掉时提醒确认也不占槽位', () => {
+    assert.equal(
+      decideBubbleSlot(input({ workWaiting: true, workOn: true, workText: '等你', workStatusEnabled: false })),
+      'none',
+    );
+  });
+
+  test('点击编排的余额压过终态任务与碎碎念：只活 10s，被顶掉等于点了没反应', () => {
+    const slot = decideBubbleSlot(
+      input({
+        balanceClicked: true,
+        balanceOn: true,
+        workTerminal: true,
+        workOn: true,
+        workText: '跑完了',
+        whisperOn: true,
+        whisperText: '在',
+      }),
+    );
+    assert.equal(slot, 'balance');
+  });
+
+  test('自动轮的余额仍然低于碎碎念与终态任务（只有点击才提权）', () => {
+    assert.equal(
+      decideBubbleSlot(input({ balanceOn: true, whisperOn: true, whisperText: '在' })),
+      'whisper',
+    );
+    assert.equal(
+      decideBubbleSlot(input({ balanceOn: true, workTerminal: true, workOn: true, workText: '跑完了' })),
+      'work-terminal',
+    );
+  });
+
+  test('点击余额但数据不可用：不占槽位（避免顶掉提醒后什么都没显示）', () => {
+    assert.equal(
+      decideBubbleSlot(input({ balanceClicked: true, balanceOn: true, balanceAvailable: false })),
+      'none',
+    );
+  });
+});
+
+describe('balancePageCount —— 点击编排的页开关', () => {
+  test('关掉窗口明细：明细页与用量页一起去掉，不出现空白页', () => {
+    const withUsage = {
+      ...windowsState,
+      usage: { totalTokens: 1, inputTokens: 1, outputTokens: 0, requests: 1, spentUsd: 0 },
+    };
+    assert.equal(balancePageCount(withUsage, { detail: false }), 1);
+  });
+
+  test('关掉峰谷页：组合视图少一页', () => {
+    const combined: BalanceState = {
+      ...windowsState,
+      accountWallets: [{ currency: 'CNY', total: '11.44' }],
+      accountTier: 'peak',
+    };
+    assert.equal(balancePageCount(combined), 3);
+    assert.equal(balancePageCount(combined, { pricing: false }), 2);
+  });
+
+  test('custom 形态不受编排开关影响（页数取第三方视图）', () => {
+    assert.equal(balancePageCount(customState(3), { detail: false, pricing: false }), 3);
   });
 });
 

@@ -5,7 +5,11 @@
  * 不变量：同一时刻只渲染一个气泡，优先级依次为终态任务、说话、余额、非终态任务。
  * @module dsh-pet/src/client/pet/card/bubble-slots
  */
-import { balancePageCount as balancePageCountOf, type BalanceState } from '../../../shared/balance/index.ts';
+import {
+  balancePageCount as balancePageCountOf,
+  type BalanceState,
+  type BubblePageOptions,
+} from '../../../shared/balance/index.ts';
 import {
   BUBBLE_HOLD_IDLE,
   reduceBubbleHold,
@@ -30,6 +34,8 @@ export interface BubbleSlotInput {
   todoOn: boolean;
   /** 工作状态是否为终态（success / error）。 */
   workTerminal: boolean;
+  /** 工作状态是否为「等待确认」（ask_user_question 等人）：用户不点流程就卡住，优先级最高。 */
+  workWaiting: boolean;
   /** 工作气泡是否点亮。 */
   workOn: boolean;
   /** 工作气泡文本。 */
@@ -48,6 +54,8 @@ export interface BubbleSlotInput {
   balanceEnabled: boolean;
   /** 本次余额是否手动请求；手动请求不受开关门控。 */
   balanceManual: boolean;
+  /** 这次余额气泡是否由「点宠物本体」发起：点击编排盖过任务状态与碎碎念。 */
+  balanceClicked: boolean;
   /** 环境气泡是否点亮。 */
   envOn: boolean;
   /** 环境数据是否已到达；null 表示还没有可用数据。 */
@@ -57,7 +65,9 @@ export interface BubbleSlotInput {
 /**
  * 决定当前挂哪个气泡。
  *
- * 终态任务只活 10s，所以不让位；非终态常驻，让位 10s 没有损失。
+ * 优先级：待办面板 > 提醒确认（waiting）> 点击编排的余额 > 终态任务 > 碎碎念 >
+ * 自动余额 > 环境 > 非终态任务。终态与点击气泡都只活 10s，被顶掉就彻底看不到，所以不让位；
+ * 非终态与自动来源常驻，让位 10s 没有损失。
  *
  * @param input - 各气泡的显隐与开关。
  * @returns 命中的槽位；都不成立时为 `none`。
@@ -65,6 +75,11 @@ export interface BubbleSlotInput {
 export function decideBubbleSlot(input: BubbleSlotInput): BubbleSlot {
   // 面板是用户主动打开的窗口：它占槽时其余气泡一律让位，关掉后按原规则恢复。
   if (input.todoOn) return 'todo';
+  // 提醒确认（waiting）插到最前：用户不点「确认」，这一轮就卡在那里，别的气泡再自然也不该盖过它。
+  if (input.workWaiting && input.workOn && input.workText && input.workStatusEnabled) return 'work';
+  // 点击编排是用户主动发起的查询（点一下宠物就要看到余额），盖过任务状态与碎碎念；
+  // 它只活 10s，被自动轮询顶掉就等于「点了没反应」，所以优先级排在自动来源前面。
+  if (input.balanceClicked && input.balanceOn && input.balanceAvailable) return 'balance';
   if (input.workTerminal && input.workOn && input.workText && input.workStatusEnabled) return 'work-terminal';
   if (input.whisperOn && input.whisperText) return 'whisper';
   if (input.balanceOn && input.balanceAvailable && (input.balanceEnabled || input.balanceManual)) return 'balance';
@@ -82,8 +97,8 @@ export function decideBubbleSlot(input: BubbleSlotInput): BubbleSlot {
  * @param balance - 最近一次余额结果；`null` 表示这一拍还没有数据。
  * @returns 页数，至少 1。
  */
-export function balancePageCount(balance: BalanceState | null): number {
-  return balance ? balancePageCountOf(balance) : 1;
+export function balancePageCount(balance: BalanceState | null, pages: BubblePageOptions = {}): number {
+  return balance ? balancePageCountOf(balance, pages) : 1;
 }
 
 /** 余额气泡组件；props 与 `client/bubble.ts` 的 BalanceBubble 一致。 */
@@ -141,6 +156,8 @@ export interface BubbleComponents {
 export interface BubbleSlotsInput {
   /** 最近一次余额结果。 */
   balance: BalanceState | null;
+  /** 点击编排页设置（主页固定，明细/峰谷各一个开关）；缺省全开。 */
+  bubblePages?: BubblePageOptions;
   /** 配置是否启用余额。 */
   balanceEnabled: boolean;
   /** 本次余额是否手动请求。 */
@@ -149,6 +166,8 @@ export interface BubbleSlotsInput {
   workStatusEnabled: boolean;
   /** 工作状态是否处于终态。 */
   workTerminal: boolean;
+  /** 工作状态是否在「等待确认」（ask_user_question 等人）。 */
+  workWaiting: boolean;
   /** 当前展示条目所属会话；有值才把工作气泡做成可点。 */
   workSessionId?: string | null;
   /** 点工作气泡时跳过去；缺省即不可点（网页端直接切，桌面端由容器转发）。 */
@@ -161,8 +180,8 @@ export interface BubbleSlotsInput {
 
 /** 气泡单槽对外的读写面。 */
 export interface BubbleSlots {
-  /** 点亮余额气泡并回到第一页，重置停留计时。 */
-  showBalance(): void;
+  /** 点亮余额气泡并回到第一页，重置停留计时。clicked=true 表示由点击宠物发起（优先级更高）。 */
+  showBalance(clicked?: boolean): void;
   /** 点亮环境气泡，重置停留计时。 */
   showEnv(): void;
   /** 点余额气泡翻页，并重置停留计时。 */
@@ -207,6 +226,8 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     // 余额气泡：显隐与展开页。
     const [balanceOn, setBalanceOn] = useState(false);
     const [balancePage, setBalancePage] = useState(0);
+    // 这次余额气泡是否来自「点宠物本体」：点击编排要盖过任务状态与碎碎念（见 decideBubbleSlot）。
+    const [balanceClicked, setBalanceClicked] = useState(false);
     const balanceTimerRef = useRef<number | null>(null);
     // 环境气泡：只有显隐，没有翻页（一屏放得下）。
     const [envOn, setEnvOn] = useState(false);
@@ -246,17 +267,21 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     /** 重置余额气泡的停留计时；重复触发先清旧定时器，否则旧的会提前收起。 */
     const armBalanceTimeout = () => {
       if (balanceTimerRef.current !== null) window.clearTimeout(balanceTimerRef.current);
-      balanceTimerRef.current = window.setTimeout(() => setBalanceOn(false), BUBBLE_DURATION_MS);
+      balanceTimerRef.current = window.setTimeout(() => {
+        setBalanceOn(false);
+        setBalanceClicked(false);
+      }, BUBBLE_DURATION_MS);
     };
 
-    const showBalance = () => {
+    const showBalance = (clicked = false) => {
       setBalancePage(0); // 新一轮查询从第一页开始。
+      setBalanceClicked(clicked);
       setBalanceOn(true);
       armBalanceTimeout();
     };
 
     const cycleBalance = () => {
-      const pages = balancePageCount(input.balance);
+      const pages = balancePageCount(input.balance, input.bubblePages);
       setBalancePage((page) => (page + 1) % pages);
       // 重新计时：第 8 秒点开才剩 2 秒，看不清下一页。
       armBalanceTimeout();
@@ -267,6 +292,9 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     const balanceOnRef = useRef(false);
     const balancePageRef = useRef(0);
     const balanceStateRef = useRef<BalanceState | null>(null);
+    // 编排设置会随配置热更新；订阅只建一次，所以用 ref 读最新值。
+    const bubblePagesRef = useRef<BubblePageOptions>({});
+    bubblePagesRef.current = input.bubblePages ?? {};
     useEffect(() => {
       balanceOnRef.current = balanceOn;
     }, [balanceOn]);
@@ -281,10 +309,10 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
           // 还没有余额结果（或明确不可用）：这一下只播点击动画，不弹空气泡。
           if (!state || !state.ok) return;
           if (!balanceOnRef.current) {
-            showBalance();
+            showBalance(true);
             return;
           }
-          if (balancePageRef.current + 1 >= balancePageCount(state)) {
+          if (balancePageRef.current + 1 >= balancePageCount(state, bubblePagesRef.current)) {
             setBalanceOn(false); // 末页再点 = 收起
             return;
           }
@@ -381,6 +409,8 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
         balanceAvailable: input.balance !== null,
         balanceEnabled: input.balanceEnabled,
         balanceManual: input.balanceManual,
+        balanceClicked,
+        workWaiting: input.workWaiting,
         envOn,
         envAvailable: input.env !== null,
       });
@@ -391,7 +421,13 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
       if (slot === 'balance') {
         return input.balance === null
           ? null
-          : h(BalanceBubble, { state: input.balance, on: balanceOn, index: balancePage, onCycle: cycleBalance });
+          : h(BalanceBubble, {
+              state: input.balance,
+              on: balanceOn,
+              index: balancePage,
+              onCycle: cycleBalance,
+              pages: input.bubblePages ?? {},
+            });
       }
       if (slot === 'whisper') {
         return whisperText === null
