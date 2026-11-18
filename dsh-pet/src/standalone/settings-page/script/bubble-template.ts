@@ -37,13 +37,17 @@ function bubbleTemplate() {
   return state.globals.bubbleTemplate;
 }
 
+/**
+ * 改一行的某个字段。注意：**不能**在这里调 renderBubblePanel()——重建整个面板会让用户正在输入的
+ * input 被替换掉、焦点与光标位置全丢（输入一个字符断一次）。这里只改状态并就地刷新预览。
+ */
 function setBubbleTemplateRow(index, patch) {
   var rows = bubbleTemplate();
   if (index < 0 || index >= rows.length) return;
   var next = Object.assign({}, rows[index], patch);
   rows[index] = next;
   markDirty(true);
-  renderBubblePanel();
+  refreshBubblePreview();
 }
 
 function addBubbleTemplateRow() {
@@ -77,6 +81,7 @@ function moveBubbleTemplateRow(index, delta) {
 function bubbleTemplatePreview() {
   var rows = bubbleTemplate();
   var box = make('div', { class: 'bubblePreview' });
+  box.setAttribute('data-bubble-preview', '1');
   for (var i = 0; i < rows.length; i += 1) {
     var row = rows[i];
     var line = make('div', { class: 'bubblePreviewLine', text: fillBubbleTemplateText(row.text) });
@@ -88,9 +93,66 @@ function bubbleTemplatePreview() {
   return box;
 }
 
+/**
+ * 就地重画预览（不动输入框）：编辑时只刷新预览，保证输入焦点与光标不被重建打断。
+ */
+function refreshBubblePreview() {
+  var box = document.querySelector('[data-bubble-preview]');
+  if (!box) return;
+  box.textContent = '';
+  var rows = bubbleTemplate();
+  for (var i = 0; i < rows.length; i += 1) {
+    var row = rows[i];
+    var line = make('div', { class: 'bubblePreviewLine', text: fillBubbleTemplateText(row.text) });
+    if (row.color) line.style.color = row.color;
+    if (typeof row.size === 'number') line.style.fontSize = row.size + 'px';
+    if (row.align) line.style.textAlign = row.align;
+    box.appendChild(line);
+  }
+}
+
+/** 占位符说明：页面上直接列出全部 token 与含义（不用去翻文档，也不用猜下拉框）。 */
+function bubblePlaceholderHint() {
+  var wrap = make('div', { class: 'bubblePlaceholderHint' });
+  wrap.appendChild(make('p', { class: 'bubblePlaceholderHintTitle', text: '可用占位符（点击任一项可插入到这一行末尾）：' }));
+  var list = make('div', { class: 'bubblePlaceholderChips' });
+  for (var i = 0; i < BUBBLE_PLACEHOLDERS.length; i += 1) {
+    var item = BUBBLE_PLACEHOLDERS[i];
+    var chip = make('button', { type: 'button', class: 'bubbleChip' });
+    chip.appendChild(make('code', { class: 'bubbleChipToken', text: '{' + item.token + '}' }));
+    chip.appendChild(make('span', { class: 'bubbleChipLabel', text: item.label }));
+    chip.title = '{' + item.token + '} → ' + item.label;
+    (function (token, el) {
+      el.addEventListener('click', function () {
+        appendPlaceholderToFocusedRow(token);
+      });
+    })(item.token, chip);
+    list.appendChild(chip);
+  }
+  wrap.appendChild(list);
+  return wrap;
+}
+
+/** 把占位符追加到当前聚焦行的文本框末尾；没有聚焦行就追加到第一行。 */
+function appendPlaceholderToFocusedRow(token) {
+  var snippet = '{' + token + '}';
+  var active = document.activeElement;
+  var input = active && active.classList && active.classList.contains('wideInput') ? active : null;
+  if (!input) input = document.querySelector('.bubbleRowEditor .wideInput');
+  if (!input) return;
+  input.value = input.value + snippet;
+  var index = Number(input.getAttribute('data-row'));
+  if (isNaN(index)) index = 0;
+  setBubbleTemplateRow(index, { text: input.value });
+  input.focus();
+  var pos = input.value.length;
+  if (input.setSelectionRange) input.setSelectionRange(pos, pos);
+}
+
 /** 一行模板的编辑控件：文本 + 插入占位符 + 颜色 + 字号 + 对齐 + 排序/删除。 */
 function bubbleTemplateRowEditor(row, index, total) {
   var text = make('input', { type: 'text', class: 'wideInput', value: row.text, maxLength: 120 });
+  text.setAttribute('data-row', String(index));
   text.placeholder = '例如：余额 {balance} · 周额度剩 {weekly}';
   text.addEventListener('input', function () {
     setBubbleTemplateRow(index, { text: text.value });
@@ -168,9 +230,10 @@ function bubbleTemplateCard() {
   });
   return card(
     '自定义页',
-    '「点击编排」里加一步「自定义页」后，这一页就按下面的行渲染。文本里可以插入 {占位符}，渲染时替换成实时数据；颜色只收 #rgb/#rrggbb，字号 8~48，最多 6 行。',
+    '「点击编排」里加一步「自定义页」后，这一页就按下面的行渲染：每行是一段文本，占位符渲染时替换成实时数据，颜色只收 #rgb/#rrggbb，字号 8~48，最多 6 行。编辑时上面的预览会实时更新。',
     [
       make('div', { class: 'bubblePreviewWrap' }, [bubbleTemplatePreview()]),
+      bubblePlaceholderHint(),
     ].concat(editors).concat([add]),
   );
 }

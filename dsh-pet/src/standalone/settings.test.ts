@@ -260,6 +260,23 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
+test('气泡自定义页：编辑行只刷新预览、不整面板重建（否则输入一个字符丢焦点）', () => {
+  const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
+  assert.match(script, /function refreshBubblePreview/);
+  const body = script.match(/function setBubbleTemplateRow[\s\S]*?\n}/)?.[0] ?? '';
+  assert.ok(body.length > 0, '应生成 setBubbleTemplateRow');
+  assert.match(body, /refreshBubblePreview\(\)/);
+  assert.doesNotMatch(body, /renderBubblePanel/);
+});
+
+test('气泡自定义页：页面上有占位符说明与可点击插入的 chip', () => {
+  const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
+  assert.match(script, /function bubblePlaceholderHint/);
+  assert.match(script, /可用占位符/);
+  assert.match(script, /function appendPlaceholderToFocusedRow/);
+  assert.match(script, /bubbleChip/);
+});
+
 test('settings validation accepts per-service keys and profiles, rejects unknown fields', () => {
   const input = {
     service: 'custom',

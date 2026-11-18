@@ -51,6 +51,8 @@
 - 每行一个文本模板，支持 `{token}` 占位符：`{balance}` `{tier}` `{todaySpend}` `{rolling}` `{rollingReset}` `{weekly}` `{weeklyReset}` `{peakStatus}` `{peakCountdown}` `{flashHit}` `{flashMiss}` `{flashOut}` `{proHit}` `{proMiss}` `{proOut}` `{whisper}` `{date}` `{time}`；未知 token 原样保留，缺数据显示 `--`。
 - 每行可单独设颜色（#rgb / #rrggbb）、字号（8–48 px）、对齐（左/中/右），最多 6 行，可 ↑ ↓ 调行序、加一行、删一行。
 - 卡片顶部有实时预览（用样本余额数据渲染），改完点「保存气泡设置」落库到 `bubbleTemplate`；队列里加了 `custom` 步骤才会在点击时出现这一页。
+- 卡片里直接列出全部占位符（`{token}` + 中文含义），点一下就能插到当前光标所在行的末尾；预览随输入实时更新，**编辑时不会重建面板**，所以输入焦点和光标位置不会被打断。
+- exe 的安装位置当前是 `C:\Users\Lenovo\.dsh\dsh-pet-app\win-unpacked`，`E:\projects\dsh-pet\app` 仍是指向它的 junction（桌面快捷方式、开机自启都还指向 `app\dsh-pet.exe`）。
 - 模板为空（或没配 `custom` 步骤）时该页自动跳过，不会出现空白气泡。
 
 ## 气泡优先级：谁的泡泡先占屏

@@ -161,6 +161,13 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .bubblePreviewWrap{margin:2px 0 12px;padding:10px;border-radius:10px;background:var(--dsw-alias-bg-l2, rgba(255,255,255,.04));border:1px solid var(--dsw-alias-border-l1)}
 .bubblePreview{display:flex;flex-direction:column;gap:3px}
 .bubblePreviewLine{font-size:12px;line-height:1.45;color:var(--dsw-alias-label-primary);overflow-wrap:anywhere}
+.bubblePlaceholderHint{margin:0 0 10px}
+.bubblePlaceholderHintTitle{margin:0 0 6px;font-size:12px;line-height:1.6;color:var(--dsw-alias-label-tertiary)}
+.bubblePlaceholderChips{display:flex;flex-wrap:wrap;gap:6px}
+.bubbleChip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border-radius:999px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-l2, rgba(255,255,255,.04));color:var(--dsw-alias-label-primary);font-size:12px;line-height:1.5;cursor:pointer}
+.bubbleChip:hover{border-color:var(--dsw-static-blue-500)}
+.bubbleChip code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:var(--dsw-alias-label-secondary)}
+.bubbleChipLabel{color:var(--dsw-alias-label-tertiary)}
 .bubbleRowEditor{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--dsw-alias-border-l1)}
 .bubbleRowEditor:first-of-type{border-top:0}
 .bubbleRowEditor .wideInput{flex:1 1 200px;min-width:0}
