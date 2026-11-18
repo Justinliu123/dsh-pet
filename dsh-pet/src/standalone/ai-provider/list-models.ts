@@ -206,9 +206,12 @@ export async function discoverModels(
   // DeepSeek 的密钥一律以 sk- 开头；账号登录态、别家密钥、被截断的复制都会在这里被提前拦下，
   // 省得用户对着 401 猜。
   if (/^api\.deepseek\.com$/i.test(new URL(base).hostname) && !apiKey.startsWith('sk-')) {
+    // 平台列表默认只露后 4 位，最常见的错法是直接复制那截尾号：长度短于 20 就明确点出来。
+    const shape =
+      apiKey.length < 20 ? `当前这把只有 ${apiKey.length} 个字符，多半只复制了列表里显示的尾号；` : '';
     return failure(
       'input',
-      'DeepSeek 的 API key 以 sk- 开头，这把不像：请到 platform.deepseek.com 的「API keys」页重新复制（账号登录 token 不能当密钥用）',
+      `DeepSeek 的 API key 以 sk- 开头、约 35 个字符。${shape}请到 platform.deepseek.com 的「API keys」页整把复制（账号登录 token 不能当密钥用）`,
     );
   }
 
