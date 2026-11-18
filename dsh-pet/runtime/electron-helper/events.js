@@ -310,6 +310,15 @@ PetSprite.prototype.clickSteps = function clickSteps() {
   return steps;
 };
 
+/**
+ * 点击编排自定义页模板（配置 bubbleTemplate）：每行文本 + {占位符} + 颜色/字号/对齐。
+ * 原样交给 shared 渲染；配置缺失/非法时返回空数组，custom 页就会自动跳过。
+ */
+PetSprite.prototype.bubbleTemplate = function bubbleTemplate() {
+  const template = this.pet && this.pet.bubbleTemplate;
+  return Array.isArray(template) ? template : [];
+};
+
 PetSprite.prototype.bubblePages = function bubblePages() {
   const pages = this.pet && this.pet.bubbleClickPages;
   if (!pages || typeof pages !== 'object') return {};

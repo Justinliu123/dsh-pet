@@ -7,7 +7,7 @@
  */
 import type { Animations, FontConfig,
   BubbleClickPages, ModelSelection, Pet, PetDisplay, PhysicsParams, Weights } from './types.ts';
-import type { BubbleClickStep } from './balance/types.ts';
+import type { BubbleClickStep, BubbleRowTemplate } from './balance/types.ts';
 
 /** 显示位置白名单。 */
 export const PET_DISPLAYS: PetDisplay[] = ['web', 'desktop', 'both', 'none'];
@@ -35,6 +35,7 @@ export function flattenConfigPets(merged: Record<string, Record<string, unknown>
         font: conf.font as FontConfig | undefined,
         bubbleClickPages: conf.bubbleClickPages as BubbleClickPages | undefined,
         bubbleClickSteps: conf.bubbleClickSteps as BubbleClickStep[] | undefined,
+    bubbleTemplate: conf.bubbleTemplate as BubbleRowTemplate[] | undefined,
         confineToScreen: conf.confineToScreen as boolean | undefined,
         workStatusTexts: conf.workStatusTexts as string[][] | undefined,
         // 睡觉文案：渲染端要能「睡着时点对话/碎碎念就弹拒绝台词」，所以必须在拍平时带出来

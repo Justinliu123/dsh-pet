@@ -15,7 +15,7 @@ function globalCards() {
 
 /** 「气泡」分区：外观字号 + 点击编排。两者都写 main 条目的全局字段，各有自己的保存按钮。 */
 function bubbleCards() {
-  return [fontCard, bubbleClickCard];
+  return [fontCard, bubbleClickCard, bubbleTemplateCard];
 }
 
 /** 编排步骤目录：顺序即点击顺序；whisper 没有内容时消费端会跳过。 */
@@ -25,6 +25,7 @@ function bubbleStepDefs() {
     { kind: 'detail', label: '窗口明细', hint: '5h 与周额度各自还剩多少、什么时候重置；服务商给了区间用量时跟在它后面。' },
     { kind: 'pricing', label: '峰谷价目', hint: 'DeepSeek 单价（命中/未命中/输出）与距下次峰谷切换的倒计时；只有同时有账户余额与窗口额度时才有内容。' },
     { kind: 'whisper', label: '碎碎念 / 对话', hint: '最近一条碎碎念或对话气泡；没有内容时这一步自动跳过。' },
+    { kind: 'custom', label: '自定义页', hint: '按「自定义页」卡片里配的文本/颜色/字号渲染；没配置内容时自动跳过。' },
   ];
 }
 

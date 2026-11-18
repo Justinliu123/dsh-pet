@@ -254,7 +254,7 @@ Object.assign(PetSprite.prototype, {
   /** 余额气泡当前有几页：规则归共享层（与每页内容同源），这里只补「还没有结果」的兜底。 */
   balancePageCount() {
     const s = this.balanceState;
-    return s ? S.clickPageCount(s, this.clickSteps(), this.bubblePages(), this.whisperText) : 1;
+    return s ? S.clickPageCount(s, this.clickSteps(), this.bubblePages(), this.whisperText, this.bubbleTemplate()) : 1;
   },
 
   /** 余额气泡此刻是否可点切页：页数多于 1 且气泡正在显示。 */

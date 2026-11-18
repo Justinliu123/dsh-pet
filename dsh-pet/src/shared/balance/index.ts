@@ -12,6 +12,7 @@ export * from './tone.ts';
 export * from './parse.ts';
 export * from './percent.ts';
 export * from './view.ts';
+export * from './template.ts';
 export * from './pricing.ts';
 export * from './notice.ts';
 

@@ -287,6 +287,15 @@
     { "kind": "detail" },
     { "kind": "pricing" }
   ],
+  // bubbleTemplate（「气泡」分区 → 点击编排 → 自定义页）：每行一条，文本里的 {占位符} 在气泡里
+  // 替换成实时数据（余额/额度/峰谷价目/碎碎念/时间等，占位符表见设置页的下拉提示）。
+  // color 只接受 #rgb / #rrggbb；size 为字号 px（8~48，渲染时随气泡基准缩放）；align 为 left/center/right；
+  // 最多 6 行。把点击队列里加一条 { "kind": "custom" } 才会显示这一页。
+  "bubbleTemplate": [
+    { "text": "余额 {balance}", "color": "#e6e8ee", "size": 15, "align": "center" },
+    { "text": "今日已用 {todaySpend} · 周额度剩 {weekly}", "color": "#9aa0aa", "size": 10, "align": "center" },
+    { "text": "{peakStatus} · {peakCountdown}", "color": "#9aa0aa", "size": 10, "align": "center" }
+  ],
   // ===================== 默认宠物列表（多开） =====================
   // pets 数组定义默认宠物；「设置页 → 添加宠物」的默认模板取 pets[0]（main）。
   // 每个宠物独立：name（显示名，可重复：悬浮提示 / AI 人设追加「你的名字是X」/ 未来命令行定位的

@@ -54,6 +54,7 @@ export const GLOBAL_DEFAULT_KEYS = [
   'font',
   'bubbleClickPages',
   'bubbleClickSteps',
+  'bubbleTemplate',
   'confineToScreen',
   'voiceEnabled',
   'voiceName',

@@ -13,6 +13,7 @@ import {
   customViews,
   type BalanceBubbleRow,
   type BalanceState,
+  type BubbleRowTemplate,
   type CustomNode,
 } from '../shared/balance/index.ts';
 import {
@@ -142,6 +143,16 @@ function injectBubbleCss(): void {
 }
 
 /** 把余额行数据映射成 React 节点。 */
+/** 自定义模板行的外观：颜色/字号/对齐（渲染值来自配置，校验层已限制范围）。 */
+function rowStyle(r: BalanceBubbleRow): Record<string, string> | undefined {
+  if (r.style === undefined) return undefined;
+  const style: Record<string, string> = {};
+  if (r.style.color !== undefined) style.color = r.style.color;
+  if (r.style.size !== undefined) style.fontSize = r.style.size + 'px';
+  if (r.style.align !== undefined) style.textAlign = r.style.align;
+  return style;
+}
+
 function rowsToNodes(h: typeof jsx, rows: BalanceBubbleRow[]): ReactNode {
   // 含档位段时同一行内联渲染，峰/谷着色。
   if (rows.some((r) => r.role === 'tier')) {
@@ -157,7 +168,7 @@ function rowsToNodes(h: typeof jsx, rows: BalanceBubbleRow[]): ReactNode {
             children: r.text,
           });
         }
-        return h('span', { key: i, children: r.text });
+        return h('span', { key: i, style: rowStyle(r), children: r.text });
       }),
     });
   }
@@ -231,9 +242,13 @@ function rowsToNodes(h: typeof jsx, rows: BalanceBubbleRow[]): ReactNode {
         ],
       });
     }
-    if (r.role === 'error') return h('div', { key: i, className: 'pet-bub-err', children: r.text });
-    if (r.role === 'sub') return h('div', { key: i, className: 'pet-bub-row pet-bub-sub', children: r.text });
-    return h('div', { key: i, className: 'pet-bub-row', children: r.text });
+    if (r.role === 'error') {
+      return h('div', { key: i, className: 'pet-bub-err', style: rowStyle(r), children: r.text });
+    }
+    if (r.role === 'sub') {
+      return h('div', { key: i, className: 'pet-bub-row pet-bub-sub', style: rowStyle(r), children: r.text });
+    }
+    return h('div', { key: i, className: 'pet-bub-row', style: rowStyle(r), children: r.text });
   });
 }
 
@@ -290,6 +305,7 @@ export function makeBalanceBubble(rt: {
     onCycle,
     pages = {},
     steps,
+    template,
     whisperText = null,
   }: {
     state: BalanceState;
@@ -299,6 +315,8 @@ export function makeBalanceBubble(rt: {
     /** 点击编排页设置；缺省全开（收起态 + 明细 + 峰谷）。 */
     pages?: BubblePageOptions;
     steps?: readonly BubbleClickStep[];
+    /** 自定义页模板（点击编排里 custom 步骤的行内容）。 */
+    template?: readonly BubbleRowTemplate[];
     whisperText?: string | null;
   }) {
     // shown 是实际显示页，index 是目标页；分开是为了留出淡出换内容的 250ms。
@@ -318,7 +336,7 @@ export function makeBalanceBubble(rt: {
     const isCustom = state.ok && state.shape === 'custom';
     const views = isCustom ? customViews(state) : undefined;
     const tree = views ? views[Math.min(shown, views.length - 1)] : undefined;
-    const rows = isCustom ? [] : clickPageView(state, shown, steps, pages, whisperText ?? null);
+    const rows = isCustom ? [] : clickPageView(state, shown, steps, pages, whisperText ?? null, template);
     // 可点：windows 可展开；custom 只有多于 1 页才可点；其余形态点开没有新内容。
     const clickable = state.ok && (state.shape === 'windows' || (isCustom && customClickable(state)));
     // 不可用状态是多行说明，套用碎碎念的窄字号变体。

@@ -55,10 +55,23 @@ function pickBubbleSteps(source) {
   const raw = Array.isArray(source.bubbleClickSteps) && source.bubbleClickSteps.length
     ? source.bubbleClickSteps
     : defaultBubbleSteps(source.bubbleClickPages);
-  const known = { summary: true, detail: true, pricing: true, whisper: true };
+  const known = { summary: true, detail: true, pricing: true, whisper: true, custom: true };
   return raw.slice(0, 8).map(function (step) {
     const kind = step && typeof step.kind === 'string' && known[step.kind] ? step.kind : 'summary';
     return { kind: kind, enabled: !step || step.enabled !== false };
+  });
+}
+
+/** 自定义页模板：只保留有文本的行，归一化颜色/字号/对齐（消费端与校验层同口径）。 */
+function pickBubbleTemplate(source) {
+  const raw = Array.isArray(source) ? source : [];
+  return raw.slice(0, 6).map(function (row) {
+    const text = row && typeof row.text === 'string' && row.text.length ? row.text : ' ';
+    const out = { text: text };
+    if (row && typeof row.color === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(row.color)) out.color = row.color.toLowerCase();
+    if (row && typeof row.size === 'number' && Number.isFinite(row.size)) out.size = Math.min(48, Math.max(8, Math.round(row.size)));
+    if (row && (row.align === 'left' || row.align === 'center' || row.align === 'right')) out.align = row.align;
+    return out;
   });
 }
 
@@ -99,6 +112,7 @@ function pickGlobals(main) {
       pricing: !source.bubbleClickPages || source.bubbleClickPages.pricing !== false,
     },
     bubbleClickSteps: pickBubbleSteps(source),
+    bubbleTemplate: pickBubbleTemplate(source.bubbleTemplate),
     chatMemoryRounds: Number.isFinite(Number(source.chatMemoryRounds)) ? Number(source.chatMemoryRounds) : 0,
     chatImageLimit: Number.isFinite(Number(source.chatImageLimit)) ? Number(source.chatImageLimit) : 0,
     animationWeights: pickWeights(source.animationWeights),
@@ -235,6 +249,7 @@ function petsBody() {
     font: state.globals.font,
     bubbleClickPages: bubblePagesFromSteps(),
     bubbleClickSteps: state.globals.bubbleClickSteps,
+    bubbleTemplate: state.globals.bubbleTemplate,
     chatMemoryRounds: state.globals.chatMemoryRounds,
     chatImageLimit: state.globals.chatImageLimit,
     animationWeights: state.globals.animationWeights,

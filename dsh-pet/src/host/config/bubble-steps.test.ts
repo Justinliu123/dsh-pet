@@ -14,7 +14,7 @@ test('合法形状：四种 kind 都能用，enabled 可省', () => {
   assert.equal(bubbleClickStepsValid([{ kind: 'summary' }]), true);
   assert.equal(bubbleClickStepsValid([{ kind: 'detail', enabled: false }]), true);
   assert.equal(bubbleClickStepsValid([{ kind: 'pricing', enabled: true }, { kind: 'whisper' }]), true);
-  assert.deepEqual(BUBBLE_STEP_KINDS, ['summary', 'detail', 'pricing', 'whisper']);
+  assert.deepEqual(BUBBLE_STEP_KINDS, ['summary', 'detail', 'pricing', 'whisper', 'custom']);
 });
 
 test('非法形状：空数组、超长、未知 kind、enabled 类型错都拒', () => {

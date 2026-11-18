@@ -340,6 +340,11 @@ test('settings shell is accessible, self contained, and never saves browser secr
   assert.match(settingsScript, /function moveBubbleStep/);
   assert.match(settingsScript, /function setBubbleStepEnabled/);
   assert.match(settingsScript, /bubbleClickSteps/);
+  assert.match(settingsScript, /function bubbleTemplateCard/);
+  assert.match(settingsScript, /function bubbleTemplatePreview/);
+  assert.match(settingsScript, /function setBubbleTemplateRow/);
+  assert.match(settingsScript, /BUBBLE_PLACEHOLDERS/);
+  assert.match(settingsScript, /SAMPLE_BUBBLE_CONTEXT/);
   assert.doesNotMatch(settingsScript, /g-bubble-detail|g-bubble-pricing/);
   assert.match(settingsScript, /history\.replaceState/);
   assert.match(settingsScript, /X-DSH-Pet-Token/);

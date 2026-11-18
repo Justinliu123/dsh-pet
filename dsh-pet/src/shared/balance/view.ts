@@ -9,7 +9,16 @@
 
 import { HANDLERS } from './handlers/index.ts';
 import { pricingRows } from './pricing.ts';
-import type { BalanceBubbleRow, BalanceState, BalanceUnavailable, BubbleClickStep, BubblePageKind, CustomNode } from './types.ts';
+import { renderBubbleTemplate } from './template.ts';
+import type {
+  BalanceBubbleRow,
+  BalanceState,
+  BalanceUnavailable,
+  BubbleClickStep,
+  BubblePageKind,
+  BubbleRowTemplate,
+  CustomNode,
+} from './types.ts';
 
 /**
  * 不可用状态的气泡行：显式给出原因，绝不伪造数字。
@@ -123,6 +132,7 @@ export function clickPageKinds(
   steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
   options: BubblePageOptions = {},
   whisperText?: string | null,
+  template?: readonly BubbleRowTemplate[],
 ): BubbleClickPage[] {
   const seen = new Set<BubblePageKind>();
   const pages: BubbleClickPage[] = [];
@@ -130,7 +140,7 @@ export function clickPageKinds(
     if (step === null || typeof step !== 'object') continue;
     if (step.enabled === false) continue;
     const kind = step.kind;
-    if (kind !== 'summary' && kind !== 'detail' && kind !== 'pricing' && kind !== 'whisper') continue;
+    if (kind !== 'summary' && kind !== 'detail' && kind !== 'pricing' && kind !== 'whisper' && kind !== 'custom') continue;
     if (seen.has(kind)) continue;
     seen.add(kind);
     // 明细/用量只有窗口形态有；money/points 这类内置单页形态点了也只该有一页。
@@ -139,6 +149,7 @@ export function clickPageKinds(
     if (kind === 'pricing' && options.pricing === false) continue;
     if (kind === 'pricing' && !pricingPageAvailable(state)) continue;
     if (kind === 'whisper' && (whisperText === undefined || whisperText === null || whisperText === '')) continue;
+    if (kind === 'custom' && (template === undefined || template.length === 0)) continue;
     pages.push(kind);
     if (kind === 'detail' && state.ok && state.usage) pages.push('usage');
   }
@@ -151,10 +162,11 @@ export function clickPageCount(
   steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
   options: BubblePageOptions = {},
   whisperText?: string | null,
+  template?: readonly BubbleRowTemplate[],
 ): number {
   if (!state.ok) return 1;
   if (state.shape === 'custom') return Math.max(1, customViews(state)?.length ?? 1);
-  return clickPageKinds(state, steps, options, whisperText).length;
+  return clickPageKinds(state, steps, options, whisperText, template).length;
 }
 
 /**
@@ -168,15 +180,17 @@ export function clickPageView(
   steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
   options: BubblePageOptions = {},
   whisperText?: string | null,
+  template?: readonly BubbleRowTemplate[],
 ): BalanceBubbleRow[] {
   if (!state.ok) return unavailableRows(state);
   if (state.shape === 'custom') {
     const views = customViews(state) ?? [];
     return views.length === 0 ? [] : [];
   }
-  const kinds = clickPageKinds(state, steps, options, whisperText);
+  const kinds = clickPageKinds(state, steps, options, whisperText, template);
   const kind = kinds[Math.min(Math.max(index, 0), kinds.length - 1)];
   const handler = HANDLERS[state.shape];
+  if (kind === 'custom') return renderBubbleTemplate(template, state, whisperText);
   if (kind === 'whisper') return [{ role: 'label', text: whisperText ?? '' }];
   if (kind === 'pricing') return pricingRows();
   if (kind === 'detail') return balanceDetailView(state);

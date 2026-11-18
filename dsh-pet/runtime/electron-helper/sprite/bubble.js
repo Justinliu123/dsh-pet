@@ -158,7 +158,14 @@ Object.assign(PetSprite.prototype, {
       // 每页内容与页数同源（S.balancePageView / S.balancePageCount）：不再按「index>0 即窗口明细」二分化，
       // 否则新增的用量页会和明细挤在同一页。没有读数时回落到缓存的首屏行。
       const rows = this.balanceState
-        ? S.clickPageView(this.balanceState, this.balanceViewIndex, this.clickSteps(), this.bubblePages(), this.whisperText)
+        ? S.clickPageView(
+            this.balanceState,
+            this.balanceViewIndex,
+            this.clickSteps(),
+            this.bubblePages(),
+            this.whisperText,
+            this.bubbleTemplate(),
+          )
         : this.balanceView;
       const hasTier = rows.some((r) => r.role === 'tier');
       if (hasTier) {
@@ -168,6 +175,7 @@ Object.assign(PetSprite.prototype, {
         for (const r of rows) {
           const span = document.createElement('span');
           if (r.role === 'tier') span.className = 'pet-bub-tier pet-bub-tier-' + r.tier;
+          applyRowStyle(span, r);
           span.textContent = r.text;
           line.appendChild(span);
         }
@@ -248,6 +256,7 @@ Object.assign(PetSprite.prototype, {
           if (r.role === 'error') div.className = 'pet-bub-err';
           else if (r.role === 'sub') div.className = 'pet-bub-row pet-bub-sub';
           else div.className = 'pet-bub-row';
+          applyRowStyle(div, r);
           div.textContent = r.text;
           this.bubble.appendChild(div);
         }
@@ -339,3 +348,15 @@ Object.assign(PetSprite.prototype, {
     return wrap;
   },
 });
+/**
+ * 自定义模板行的外观：把 shared 行数据里的 style 落到 DOM（颜色/字号/对齐）。
+ * 颜色取值与字号范围在宿主校验层已限制，这里只做赋值。
+ */
+function applyRowStyle(el, row) {
+  const style = row && row.style;
+  if (!style) return;
+  if (style.color) el.style.color = style.color;
+  if (style.size !== undefined) el.style.fontSize = style.size + 'px';
+  if (style.align) el.style.textAlign = style.align;
+}
+

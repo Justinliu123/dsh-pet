@@ -153,10 +153,30 @@ export function bubbleClickPagesValid(value: unknown): boolean {
 }
 
 /** 点击编排队列允许的步骤种类（与设置页「气泡 → 点击编排」的行一一对应）。 */
-export const BUBBLE_STEP_KINDS = ['summary', 'detail', 'pricing', 'whisper'] as const;
+export const BUBBLE_STEP_KINDS = ['summary', 'detail', 'pricing', 'whisper', 'custom'] as const;
 
 /** bubbleClickSteps 段校验：非空数组、最多 8 步，每步 { kind 在白名单里, enabled? 布尔 }。
  *  未知子键忽略；kind 写错即整段非法（告警 + 取默认）。 */
+/** 自定义气泡行的外观白名单：颜色只收 #rgb/#rrggbb（前端直接塞进 style，必须挡住表达式注入）。 */
+export const BUBBLE_ROW_COLORS = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i;
+export const BUBBLE_ROW_ALIGNS = ['left', 'center', 'right'] as const;
+
+/** 自定义气泡模板：最多 6 行、每行文本 ≤120 字，颜色/字号/对齐都受白名单约束。 */
+export function bubbleTemplateValid(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 6) return false;
+  for (const row of value) {
+    if (row === null || typeof row !== 'object' || Array.isArray(row)) return false;
+    const item = row as Record<string, unknown>;
+    if (typeof item.text !== 'string' || item.text.length === 0 || item.text.length > 120) return false;
+    if (item.color !== undefined && (typeof item.color !== 'string' || !BUBBLE_ROW_COLORS.test(item.color))) return false;
+    if (item.size !== undefined) {
+      if (typeof item.size !== 'number' || !Number.isFinite(item.size) || item.size < 8 || item.size > 48) return false;
+    }
+    if (item.align !== undefined && !BUBBLE_ROW_ALIGNS.includes(item.align as (typeof BUBBLE_ROW_ALIGNS)[number])) return false;
+  }
+  return true;
+}
+
 export function bubbleClickStepsValid(value: unknown): boolean {
   if (!Array.isArray(value) || value.length === 0 || value.length > 8) return false;
   for (const step of value) {
@@ -281,6 +301,8 @@ export function topFieldValid(key: string, value: unknown): boolean {
       return bubbleClickPagesValid(value);
     case 'bubbleClickSteps':
       return bubbleClickStepsValid(value);
+    case 'bubbleTemplate':
+      return bubbleTemplateValid(value);
     case 'whisperModel':
     case 'chatModel':
       return modelSelectionValid(value);

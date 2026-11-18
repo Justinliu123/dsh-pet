@@ -158,6 +158,17 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .btn.danger{background:var(--dsw-static-red-500);border-color:transparent;color:#fff}
 .btn.danger:hover{opacity:.9}
 .petBar .select{flex:1;min-width:0}
+.bubblePreviewWrap{margin:2px 0 12px;padding:10px;border-radius:10px;background:var(--dsw-alias-bg-l2, rgba(255,255,255,.04));border:1px solid var(--dsw-alias-border-l1)}
+.bubblePreview{display:flex;flex-direction:column;gap:3px}
+.bubblePreviewLine{font-size:12px;line-height:1.45;color:var(--dsw-alias-label-primary);overflow-wrap:anywhere}
+.bubbleRowEditor{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--dsw-alias-border-l1)}
+.bubbleRowEditor:first-of-type{border-top:0}
+.bubbleRowEditor .wideInput{flex:1 1 200px;min-width:0}
+.bubbleRowEditor .bubbleInsert{flex:0 0 78px}
+.bubbleRowEditor .bubbleColor{flex:0 0 34px;height:28px;padding:0;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:none}
+.bubbleRowEditor .bubbleSize{flex:0 0 58px}
+.bubbleRowEditor .bubbleAlign{flex:0 0 66px}
+.bubbleRowEditor .btn.ghost{flex:none;min-width:28px;padding:0 6px}
 .empty{padding:16px 0;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 @media(max-width:767px){
   .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}

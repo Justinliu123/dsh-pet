@@ -10,6 +10,7 @@ import {
   balancePageCount as balancePageCountOf,
   type BalanceState,
   type BubbleClickStep,
+  type BubbleRowTemplate,
   type BubblePageOptions,
 } from '../../../shared/balance/index.ts';
 import {
@@ -107,10 +108,11 @@ export function balancePageCount(
   pages: BubblePageOptions = {},
   steps: readonly BubbleClickStep[] = DEFAULT_CLICK_STEPS,
   whisperText: string | null = null,
+  template?: readonly BubbleRowTemplate[],
 ): number {
   if (!balance || !balance.ok) return 1;
   if (balance.shape === 'custom') return balancePageCountOf(balance, pages);
-  return clickPageCountOf(balance, steps, pages, whisperText);
+  return clickPageCountOf(balance, steps, pages, whisperText, template);
 }
 
 /** 余额气泡组件；props 与 `client/bubble.ts` 的 BalanceBubble 一致。 */
@@ -172,6 +174,8 @@ export interface BubbleSlotsInput {
   bubblePages?: BubblePageOptions;
   /** 点击编排队列（来自配置 bubbleClickSteps）；缺省按 summary → detail → pricing。 */
   bubbleSteps?: readonly BubbleClickStep[];
+  /** 自定义页模板（来自配置 bubbleTemplate）；队列里没有 custom 步骤时不使用。 */
+  bubbleTemplate?: readonly BubbleRowTemplate[];
   /** 配置是否启用余额。 */
   balanceEnabled: boolean;
   /** 本次余额是否手动请求。 */
@@ -295,7 +299,13 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     };
 
     const cycleBalance = () => {
-      const pages = balancePageCount(input.balance, input.bubblePages, input.bubbleSteps ?? DEFAULT_CLICK_STEPS, whisperText);
+      const pages = balancePageCount(
+        input.balance,
+        input.bubblePages,
+        input.bubbleSteps ?? DEFAULT_CLICK_STEPS,
+        whisperText,
+        input.bubbleTemplate,
+      );
       setBalancePage((page) => (page + 1) % pages);
       // 重新计时：第 8 秒点开才剩 2 秒，看不清下一页。
       armBalanceTimeout();
@@ -311,6 +321,9 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     bubblePagesRef.current = input.bubblePages ?? {};
     const bubbleStepsRef = useRef<readonly BubbleClickStep[]>(DEFAULT_CLICK_STEPS);
     bubbleStepsRef.current = input.bubbleSteps ?? DEFAULT_CLICK_STEPS;
+    // 自定义页模板同样随配置热更新，订阅只建一次所以也走 ref。
+    const bubbleTemplateRef = useRef<readonly BubbleRowTemplate[] | undefined>(input.bubbleTemplate);
+    bubbleTemplateRef.current = input.bubbleTemplate;
     // 碎碎念页要显示「最近一条」文案；同样用 ref，订阅只建一次。
     whisperTextRef.current = whisperText;
     useEffect(() => {
@@ -330,7 +343,13 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
             showBalance(true);
             return;
           }
-          const pages = balancePageCount(state, bubblePagesRef.current, bubbleStepsRef.current, whisperTextRef.current);
+          const pages = balancePageCount(
+            state,
+            bubblePagesRef.current,
+            bubbleStepsRef.current,
+            whisperTextRef.current,
+            bubbleTemplateRef.current,
+          );
           if (balancePageRef.current + 1 >= pages) {
             setBalanceOn(false); // 末页再点 = 收起
             return;
@@ -447,6 +466,7 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
               onCycle: cycleBalance,
               pages: input.bubblePages ?? {},
               steps: input.bubbleSteps ?? DEFAULT_CLICK_STEPS,
+              template: input.bubbleTemplate,
               whisperText,
             });
       }

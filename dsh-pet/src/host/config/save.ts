@@ -11,7 +11,15 @@ import { dirname } from 'node:path';
 import { CORNER_SET, isValidPetId, PET_DISPLAY_SET } from './constants.ts';
 import { isValidSizePercent } from '../../shared/pet-size.ts';
 import type { ConfigPaths } from './constants.ts';
-import { bubbleClickPagesValid, bubbleClickStepsValid, fontValid, modelSelectionValid, physicsValid, topFieldValid } from './validate.ts';
+import {
+  bubbleClickPagesValid,
+  bubbleClickStepsValid,
+  bubbleTemplateValid,
+  fontValid,
+  modelSelectionValid,
+  physicsValid,
+  topFieldValid,
+} from './validate.ts';
 import type { MemoryConfig } from '../../shared/memory.ts';
 
 /**
@@ -160,6 +168,10 @@ export function saveUserConfig(
   // 与 bubbleClickPages 同语义，但队列优先；落盘只留 { kind, enabled? }，未知子键丢弃。
   const bcs = o.bubbleClickSteps;
   if (bcs !== undefined && !bubbleClickStepsValid(bcs)) return null;
+  // bubbleTemplate（点击编排里 custom 步骤的内容模板：每行文本 + {占位符} + 颜色/字号/对齐）：
+  // 与队列同一套语义——传了就整段校验后进白名单；颜色只收 #rgb/#rrggbb，避免样式注入。
+  const btp = o.bubbleTemplate;
+  if (btp !== undefined && !bubbleTemplateValid(btp)) return null;
   // whisperModel / chatModel（碎碎念 / 对话各自的服务商 + 模型；设置页两个下拉框写的就是它们）：
   // 与 physics 同一套语义——传了就整段校验后进白名单，没传则走下面的透传保留。
   // 落盘时归一化成 { provider, model } 两个 trim 过的字符串（请求体多带的键不写进用户层）。
@@ -233,6 +245,15 @@ export function saveUserConfig(
       return row;
     });
   }
+  if (btp !== undefined) {
+    outConfig.bubbleTemplate = (btp as Array<Record<string, unknown>>).map((item) => {
+      const clean: { text: string; color?: string; size?: number; align?: string } = { text: String(item.text) };
+      if (typeof item.color === 'string') clean.color = item.color.toLowerCase();
+      if (typeof item.size === 'number') clean.size = Math.round(item.size);
+      if (typeof item.align === 'string') clean.align = item.align;
+      return clean;
+    });
+  }
   if (wm !== undefined) outConfig.whisperModel = cleanModel(wm as Record<string, unknown>);
   if (cm !== undefined) outConfig.chatModel = cleanModel(cm as Record<string, unknown>);
   // 数值归一化落盘：请求体传 "9" 也存成 9（与读取侧 topFieldValid 的 Number() 口径一致）
@@ -265,6 +286,7 @@ export function saveUserConfig(
   if (fo !== undefined) bodyOwned.add('font');
   if (bcp !== undefined) bodyOwned.add('bubbleClickPages');
   if (bcs !== undefined) bodyOwned.add('bubbleClickSteps');
+  if (btp !== undefined) bodyOwned.add('bubbleTemplate');
   if (wm !== undefined) bodyOwned.add('whisperModel');
   if (cm !== undefined) bodyOwned.add('chatModel');
   if (cmr !== undefined) bodyOwned.add('chatMemoryRounds');

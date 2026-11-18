@@ -131,6 +131,7 @@ export function createCardRuntime(rt: PetRuntime) {
       balanceEnabled: cfg.balanceEnabled,
       ...(cfg.bubbleClickPages === undefined ? {} : { bubblePages: cfg.bubbleClickPages }),
       ...(cfg.bubbleClickSteps === undefined ? {} : { bubbleSteps: cfg.bubbleClickSteps }),
+      ...(cfg.bubbleTemplate === undefined ? {} : { bubbleTemplate: cfg.bubbleTemplate }),
       balanceManual,
       env: env ?? null,
       workStatusEnabled: cfg.workStatusEnabled,

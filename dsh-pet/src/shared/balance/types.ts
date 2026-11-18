@@ -205,7 +205,7 @@ export interface WindowUsage {
 }
 
 /** 气泡行数据：role 决定两端的样式类，tier 用于峰谷着色 */
-export type BalanceBubbleRow =
+type BalanceBubbleRowBase =
   | { role: 'label'; text: string }
   | { role: 'sub'; text: string }
   | { role: 'error'; text: string }
@@ -243,6 +243,27 @@ export type BalanceBubbleRow =
       inputPercent?: number;
     };
 
+/** 自定义行的外观覆盖（来自「气泡 → 点击编排 → 自定义页」模板）。 */
+export interface BubbleRowStyle {
+  /** 文字颜色，CSS 颜色串（已在校验层限制为 #rgb/#rrggbb 或少量安全名字）。 */
+  color?: string;
+  /** 字号（对外为 px，渲染时按气泡基准缩放）。 */
+  size?: number;
+  /** 行内对齐；缺省左对齐。 */
+  align?: 'left' | 'center' | 'right';
+}
+
+/** 气泡行：基础行 + 可选外观覆盖。 */
+export type BalanceBubbleRow = BalanceBubbleRowBase & { style?: BubbleRowStyle };
+
+/** 自定义气泡页里的一行：文本里可用 {token} 占位符，渲染时替换成实时数据。 */
+export interface BubbleRowTemplate {
+  readonly text: string;
+  readonly color?: string;
+  readonly size?: number;
+  readonly align?: 'left' | 'center' | 'right';
+}
+
 /** 不可用状态是否弹文字说明的判定结果 */
 export interface BalanceNoticeDecision {
   /** true 表示本次应弹气泡，false 表示同一原因已提示过且非显式请求 */
@@ -252,7 +273,7 @@ export interface BalanceNoticeDecision {
 }
 
 /** 点击编排里的一步：顺序就是点宠物时依次弹的顺序（参考鲸鱼挂件的队列，这里固定为几种内置页）。 */
-export type BubblePageKind = 'summary' | 'detail' | 'pricing' | 'whisper';
+export type BubblePageKind = 'summary' | 'detail' | 'pricing' | 'whisper' | 'custom';
 
 /** 点击编排的单步：kind 选内容，enabled=false 表示这一步先关掉（仍留在队列里方便再打开）。 */
 export interface BubbleClickStep {
