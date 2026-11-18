@@ -103,6 +103,7 @@ function styleOf(row: BubbleRowTemplate): BubbleRowStyle | undefined {
   if (row.color !== undefined && row.color !== '') style.color = row.color;
   if (row.size !== undefined) style.size = row.size;
   if (row.align !== undefined && row.align !== 'left') style.align = row.align;
+  if (row.bold === true) style.bold = true;
   return Object.keys(style).length > 0 ? style : undefined;
 }
 

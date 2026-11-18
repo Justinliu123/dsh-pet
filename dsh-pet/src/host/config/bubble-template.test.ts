@@ -20,6 +20,7 @@ test('合法形状：文本 + 可选颜色/字号/对齐', () => {
     true,
   );
   assert.equal(bubbleTemplateValid([{ text: 'x', color: '#abc' }]), true);
+  assert.equal(bubbleTemplateValid([{ text: 'x', bold: true }]), true);
 });
 
 test('非法形状：空数组、超长、空文本、坏颜色、坏字号、坏对齐都拒', () => {
@@ -33,6 +34,7 @@ test('非法形状：空数组、超长、空文本、坏颜色、坏字号、�
   assert.equal(bubbleTemplateValid([{ text: 'x', size: 7 }]), false);
   assert.equal(bubbleTemplateValid([{ text: 'x', size: 49 }]), false);
   assert.equal(bubbleTemplateValid([{ text: 'x', align: 'justify' }]), false);
+  assert.equal(bubbleTemplateValid([{ text: 'x', bold: 'yes' }]), false);
   assert.equal(bubbleTemplateValid(Array.from({ length: 7 }, () => ({ text: 'x' }))), false);
 });
 

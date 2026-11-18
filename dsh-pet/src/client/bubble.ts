@@ -150,6 +150,7 @@ function rowStyle(r: BalanceBubbleRow): Record<string, string> | undefined {
   if (r.style.color !== undefined) style.color = r.style.color;
   if (r.style.size !== undefined) style.fontSize = r.style.size + 'px';
   if (r.style.align !== undefined) style.textAlign = r.style.align;
+  if (r.style.bold === true) style.fontWeight = '700';
   return style;
 }
 

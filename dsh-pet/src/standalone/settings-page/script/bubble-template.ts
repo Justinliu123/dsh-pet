@@ -23,6 +23,8 @@ var BUBBLE_PLACEHOLDERS = ${JSON.stringify(options.placeholders)};
 var SAMPLE_BUBBLE_CONTEXT = ${JSON.stringify(options.context)};
 var DEFAULT_ROW_COLOR = ${JSON.stringify(options.defaultColor)};
 var BUBBLE_ROW_ALIGNS = ['left', 'center', 'right'];
+/** 最近一次聚焦的模板行输入框：点占位符时优先插到这一行（点 chip 会先抢走焦点）。 */
+var bubbleLastRowInput = null;
 
 /** 与 shared 的 fillBubbleTemplate 同规则：不认识的占位符原样保留。 */
 function fillBubbleTemplateText(text) {
@@ -88,6 +90,7 @@ function bubbleTemplatePreview() {
     if (row.color) line.style.color = row.color;
     if (typeof row.size === 'number') line.style.fontSize = row.size + 'px';
     if (row.align) line.style.textAlign = row.align;
+    if (row.bold === true) line.style.fontWeight = '700';
     box.appendChild(line);
   }
   return box;
@@ -107,6 +110,7 @@ function refreshBubblePreview() {
     if (row.color) line.style.color = row.color;
     if (typeof row.size === 'number') line.style.fontSize = row.size + 'px';
     if (row.align) line.style.textAlign = row.align;
+    if (row.bold === true) line.style.fontWeight = '700';
     box.appendChild(line);
   }
 }
@@ -123,6 +127,11 @@ function bubblePlaceholderHint() {
     chip.appendChild(make('span', { class: 'bubbleChipLabel', text: item.label }));
     chip.title = '{' + item.token + '} → ' + item.label;
     (function (token, el) {
+      // 按下时阻止默认行为：不然焦点会从正在编辑的输入框移到按钮上，
+      // appendPlaceholderToFocusedRow 就找不到「当前行」了。
+      el.addEventListener('mousedown', function (event) {
+        event.preventDefault();
+      });
       el.addEventListener('click', function () {
         appendPlaceholderToFocusedRow(token);
       });
@@ -138,6 +147,8 @@ function appendPlaceholderToFocusedRow(token) {
   var snippet = '{' + token + '}';
   var active = document.activeElement;
   var input = active && active.classList && active.classList.contains('wideInput') ? active : null;
+  // 点 chip 时焦点在按钮上，退回到「最近编辑过的那一行」，而不是永远第一行。
+  if (!input && bubbleLastRowInput && document.contains(bubbleLastRowInput)) input = bubbleLastRowInput;
   if (!input) input = document.querySelector('.bubbleRowEditor .wideInput');
   if (!input) return;
   input.value = input.value + snippet;
@@ -154,7 +165,11 @@ function bubbleTemplateRowEditor(row, index, total) {
   var text = make('input', { type: 'text', class: 'wideInput', value: row.text, maxLength: 120 });
   text.setAttribute('data-row', String(index));
   text.placeholder = '例如：余额 {balance} · 周额度剩 {weekly}';
+  text.addEventListener('focus', function () {
+    bubbleLastRowInput = text;
+  });
   text.addEventListener('input', function () {
+    bubbleLastRowInput = text;
     setBubbleTemplateRow(index, { text: text.value });
   });
 
@@ -172,6 +187,12 @@ function bubbleTemplateRowEditor(row, index, total) {
     insert.value = '';
     setBubbleTemplateRow(index, { text: text.value });
   });
+
+  var boldBox = make('input', { type: 'checkbox', class: 'bubbleBoldBox', checked: row.bold === true, title: '加粗' });
+  boldBox.addEventListener('change', function () {
+    setBubbleTemplateRow(index, { bold: boldBox.checked });
+  });
+  var bold = make('label', { class: 'bubbleBold', title: '加粗' }, [boldBox, make('span', { text: '粗体' })]);
 
   var color = make('input', { type: 'color', value: row.color || DEFAULT_ROW_COLOR, title: '文字颜色' });
   color.addEventListener('input', function () {
@@ -214,7 +235,7 @@ function bubbleTemplateRowEditor(row, index, total) {
     removeBubbleTemplateRow(index);
   });
 
-  return make('div', { class: 'bubbleRowEditor' }, [text, insert, color, size, align, up, down, remove]);
+  return make('div', { class: 'bubbleRowEditor' }, [text, insert, bold, color, size, align, up, down, remove]);
 }
 
 /** 自定义页卡片：行编辑器 + 实时预览 + 「加一行」。 */

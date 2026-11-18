@@ -251,6 +251,8 @@ export interface BubbleRowStyle {
   size?: number;
   /** 行内对齐；缺省左对齐。 */
   align?: 'left' | 'center' | 'right';
+  /** 加粗（true 时渲染 700 字重）。 */
+  bold?: boolean;
 }
 
 /** 气泡行：基础行 + 可选外观覆盖。 */
@@ -262,6 +264,7 @@ export interface BubbleRowTemplate {
   readonly color?: string;
   readonly size?: number;
   readonly align?: 'left' | 'center' | 'right';
+  readonly bold?: boolean;
 }
 
 /** 不可用状态是否弹文字说明的判定结果 */

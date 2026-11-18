@@ -358,5 +358,6 @@ function applyRowStyle(el, row) {
   if (style.color) el.style.color = style.color;
   if (style.size !== undefined) el.style.fontSize = style.size + 'px';
   if (style.align) el.style.textAlign = style.align;
+  if (style.bold === true) el.style.fontWeight = '700';
 }
 

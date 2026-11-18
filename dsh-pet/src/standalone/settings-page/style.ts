@@ -170,6 +170,10 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .bubbleChipLabel{color:var(--dsw-alias-label-tertiary)}
 .bubbleRowEditor{display:flex;align-items:center;gap:6px;padding:6px 0;border-top:1px solid var(--dsw-alias-border-l1)}
 .bubbleRowEditor:first-of-type{border-top:0}
+.bubbleRowEditor .bubbleBold{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.bubbleRowEditor .bubbleBoldBox{margin:0}
+.bubbleStepAdd{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l1)}
+.bubbleStepAddSelect{flex:1 1 auto;min-width:0}
 .bubbleRowEditor .wideInput{flex:1 1 200px;min-width:0}
 .bubbleRowEditor .bubbleInsert{flex:0 0 78px}
 .bubbleRowEditor .bubbleColor{flex:0 0 34px;height:28px;padding:0;border:1px solid var(--dsw-alias-border-l1);border-radius:6px;background:none}

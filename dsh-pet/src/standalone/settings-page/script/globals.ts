@@ -63,6 +63,52 @@ function setBubbleStepEnabled(index, enabled) {
   markDirty(true);
 }
 
+/** 从编排里删掉一步（预制步骤也能删；至少保留一步，空队列宿主会拒绝保存）。 */
+function removeBubbleStep(index) {
+  const steps = state.globals.bubbleClickSteps || [];
+  if (steps.length <= 1) return;
+  const next = steps.slice();
+  next.splice(index, 1);
+  state.globals.bubbleClickSteps = next;
+  markDirty(true);
+  renderBubblePanel();
+}
+
+/** 往编排里加一步（同一 kind 只允许出现一次）。 */
+function addBubbleStep(kind) {
+  const steps = state.globals.bubbleClickSteps || [];
+  for (let i = 0; i < steps.length; i += 1) if (steps[i].kind === kind) return;
+  state.globals.bubbleClickSteps = steps.concat([{ kind: kind }]);
+  markDirty(true);
+  renderBubblePanel();
+}
+
+/** 「加入编排」：列出还没在队列里的步骤。 */
+function bubbleStepAddRow() {
+  const steps = state.globals.bubbleClickSteps || [];
+  const defs = bubbleStepDefs();
+  const missing = defs.filter(function (def) {
+    for (let i = 0; i < steps.length; i += 1) if (steps[i].kind === def.kind) return false;
+    return true;
+  });
+  const wrap = make('div', { class: 'bubbleStepAdd' });
+  if (missing.length === 0) {
+    wrap.appendChild(make('p', { class: 'fieldHint', text: '五种步骤都已经在编排里了；要调整顺序用 ↑ ↓，不想弹某一步就取消勾选。' }));
+    return wrap;
+  }
+  const select = make('select', { class: 'bubbleStepAddSelect' });
+  for (let i = 0; i < missing.length; i += 1) {
+    select.appendChild(make('option', { value: missing[i].kind, text: missing[i].label }));
+  }
+  const add = make('button', { type: 'button', class: 'btn ghost', text: '＋ 加入编排' });
+  add.addEventListener('click', function () {
+    addBubbleStep(select.value);
+  });
+  wrap.appendChild(select);
+  wrap.appendChild(add);
+  return wrap;
+}
+
 function bubbleStepRow(step, index, total) {
   const box = make('input', { type: 'checkbox', checked: step.enabled !== false });
   box.addEventListener('change', function () {
@@ -80,6 +126,12 @@ function bubbleStepRow(step, index, total) {
   down.addEventListener('click', function () {
     moveBubbleStep(index, 1);
   });
+  const remove = make('button', { type: 'button', class: 'btn ghost', text: '×' });
+  remove.title = '从编排里删掉这一步（之后可以用下方「加入编排」加回来）';
+  remove.disabled = total <= 1;
+  remove.addEventListener('click', function () {
+    removeBubbleStep(index);
+  });
   return make('div', { class: 'rowCheck bubbleStep' }, [
     box,
     make('span', { class: 'rowCheckText' }, [
@@ -88,6 +140,7 @@ function bubbleStepRow(step, index, total) {
     ]),
     up,
     down,
+    remove,
   ]);
 }
 
@@ -98,10 +151,10 @@ function bubbleClickCard() {
   });
   return card(
     '点击编排',
-    '点一下宠物本体，按下面顺序一页页弹；再点推进，末页再点收起（10 秒不动也会自己收）。用 ↑ ↓ 调顺序，取消勾选就跳过这一步。',
+    '点一下宠物本体，按下面顺序一页页弹；再点推进，末页再点收起（10 秒不动也会自己收）。用 ↑ ↓ 调顺序、× 删掉某一步（下方可再加入），取消勾选只是临时跳过。',
     [
-      make('p', { class: 'fieldHint', text: '共 ' + steps.length + ' 步，至少保留一步；whisper 没有内容时自动跳过。' }),
-    ].concat(rows),
+      make('p', { class: 'fieldHint', text: '共 ' + steps.length + ' 步（至少保留一步）；「自定义页」要先在下面卡片里配好内容才会出现。' }),
+    ].concat(rows).concat([bubbleStepAddRow()]),
   );
 }
 

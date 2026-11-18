@@ -58,6 +58,10 @@ test('渲染：每行一条 label，颜色/字号/对齐进 style，空行转空
   assert.equal(rows.length, 3);
   assert.deepEqual(rows[0], { role: 'label', text: '余额 ¥103.22', style: { color: '#e6e8ee', size: 15, align: 'center' } });
   assert.equal(rows[1].text, '高峰时段 · 距空闲 2 小时');
+
+  const bolded = renderBubbleTemplate([{ text: '余额 {balance}', bold: true }], state(), null, bjt(2026, 11, 18, 10, 0));
+  assert.deepEqual(bolded[0].style, { bold: true }, '加粗要带进 style，两端按 700 字重渲染');
+
   assert.deepEqual(rows[1].style, { size: 10 });
   assert.equal(rows[2].text, ' ');
 });

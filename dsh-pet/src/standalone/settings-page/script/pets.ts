@@ -71,6 +71,7 @@ function pickBubbleTemplate(source) {
     if (row && typeof row.color === 'string' && /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i.test(row.color)) out.color = row.color.toLowerCase();
     if (row && typeof row.size === 'number' && Number.isFinite(row.size)) out.size = Math.min(48, Math.max(8, Math.round(row.size)));
     if (row && (row.align === 'left' || row.align === 'center' || row.align === 'right')) out.align = row.align;
+    if (row && row.bold === true) out.bold = true;
     return out;
   });
 }

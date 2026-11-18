@@ -81,11 +81,16 @@ if (electronDist) {
 
 console.log(`[dist] electron dist: ${electronDist ?? '(无 → 由 electron-builder 下载)'}`);
 console.log(`[dist] target:        win:${target}`);
+console.log(`[dist] output:        ${process.env.DSH_PET_OUTPUT_DIR ?? 'dist-app（默认）'}`);
 // 直接调用 electron-builder 的 CLI 文件而不经 `pnpm exec`：安装路径可能含单引号，
 // 走 shell 传参会被切碎；node 直接 spawn 没有这层转义问题。
 const cli = join(root, 'node_modules', 'electron-builder', 'out', 'cli', 'cli.js');
 const args = [cli, '--win', target];
 if (electronDist) args.push(`--config.electronDist=${electronDist}`);
+// 输出目录可由环境变量覆盖：E: 盘被别的程序（如 MiniMax Code）索引时 .asar 会被占住，
+// 需要把产物放到别的盘再让 E:\projects\dsh-pet\app 用 junction 指过来。
+const outputDir = process.env.DSH_PET_OUTPUT_DIR;
+if (outputDir) args.push(`--config.directories.output=${outputDir}`);
 const child = spawn(process.execPath, args, {
   cwd: root,
   env,

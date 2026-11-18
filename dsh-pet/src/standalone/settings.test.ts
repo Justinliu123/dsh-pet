@@ -362,6 +362,15 @@ test('settings shell is accessible, self contained, and never saves browser secr
   assert.match(settingsScript, /function setBubbleTemplateRow/);
   assert.match(settingsScript, /BUBBLE_PLACEHOLDERS/);
   assert.match(settingsScript, /SAMPLE_BUBBLE_CONTEXT/);
+  // 队列要能加/删步骤：预制步骤可删（×），自定义页可以从「加入编排」拉进来。
+  assert.match(settingsScript, /function removeBubbleStep/);
+  assert.match(settingsScript, /function addBubbleStep/);
+  assert.match(settingsScript, /function bubbleStepAddRow/);
+  assert.match(settingsScript, /＋ 加入编排/);
+  // 自定义行支持加粗，且点占位符要插到「最近聚焦的那一行」而不是永远第一行。
+  assert.match(settingsScript, /class: 'bubbleBold'/);
+  assert.match(settingsScript, /粗体/);
+  assert.match(settingsScript, /bubbleLastRowInput/);
   assert.doesNotMatch(settingsScript, /g-bubble-detail|g-bubble-pricing/);
   assert.match(settingsScript, /history\.replaceState/);
   assert.match(settingsScript, /X-DSH-Pet-Token/);

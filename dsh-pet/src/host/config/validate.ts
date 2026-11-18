@@ -173,6 +173,7 @@ export function bubbleTemplateValid(value: unknown): boolean {
       if (typeof item.size !== 'number' || !Number.isFinite(item.size) || item.size < 8 || item.size > 48) return false;
     }
     if (item.align !== undefined && !BUBBLE_ROW_ALIGNS.includes(item.align as (typeof BUBBLE_ROW_ALIGNS)[number])) return false;
+    if (item.bold !== undefined && typeof item.bold !== 'boolean') return false;
   }
   return true;
 }
