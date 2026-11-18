@@ -1682,3 +1682,27 @@ describe('removeRoundsByTs —— 按轮删除（一轮两条共享 ts，成对�
     assert.equal(r.removed, 4);
   });
 });
+
+describe('saveUserConfig —— bubbleClickPages（点宠物编排气泡的两页开关）', () => {
+  test('保存时归一化：只留两个布尔，未写的子键不落盘，多余子键丢弃', () => {
+    const out = saveOnce({ pets: PETS, bubbleClickPages: { detail: false, pricing: true, extra: 1 } });
+    assert.ok(out);
+    assert.deepEqual(out.bubbleClickPages, { detail: false, pricing: true });
+
+    const onlyPricing = saveOnce({ pets: PETS, bubbleClickPages: { pricing: false } });
+    assert.ok(onlyPricing);
+    assert.deepEqual(onlyPricing.bubbleClickPages, { pricing: false });
+  });
+
+  test('没传就不写：旧配置保存后仍然走默认（两页都开）', () => {
+    const out = saveOnce({ pets: PETS });
+    assert.ok(out);
+    assert.equal(out.bubbleClickPages, undefined);
+  });
+
+  test('子键类型写错整段拒绝，不会写出一份读不回的数据', () => {
+    assert.equal(saveOnce({ pets: PETS, bubbleClickPages: { detail: 'no' } }), null);
+    assert.equal(saveOnce({ pets: PETS, bubbleClickPages: [] }), null);
+    assert.equal(saveOnce({ pets: PETS, bubbleClickPages: 'detail' }), null);
+  });
+});
