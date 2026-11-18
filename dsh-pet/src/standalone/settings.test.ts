@@ -323,9 +323,15 @@ test('settings shell is accessible, self contained, and never saves browser secr
   assert.match(settingsPage, /lang="zh-CN"/);
   assert.match(settingsPage, /type="password"/);
   assert.match(settingsPage, /aria-live="polite"/);
-  assert.match(settingsPage, /data-tab="config"/);
   assert.match(settingsPage, /data-tab="chat"/);
-  assert.match(settingsPage, /id="panel-config"/);
+  assert.match(settingsPage, /data-tab="pet"/);
+  assert.match(settingsPage, /data-tab="ai"/);
+  assert.match(settingsPage, /id="panel-pet"/);
+  assert.match(settingsPage, /id="panel-ai"/);
+  // 两个分区各一个保存按钮：把两块合在一个页面时用户点错过保存。
+  assert.equal(settingsPage.match(/class="btn primary"/g).length, 2);
+  assert.match(settingsPage, /id="pet-save"[^>]*>保存桌宠设置/);
+  assert.match(settingsPage, /id="save"[^>]*>保存 AI 设置/);
   assert.match(settingsScript, /history\.replaceState/);
   assert.match(settingsScript, /X-DSH-Pet-Token/);
   assert.doesNotMatch(settingsScript, /localStorage|sessionStorage|document\.cookie|innerHTML/);
