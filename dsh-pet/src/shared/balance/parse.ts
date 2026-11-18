@@ -177,6 +177,51 @@ function parseUsage(raw: unknown): BalanceUsage | undefined | null {
 }
 
 /**
+ * 解析钱包数组（money 形态与 windows 组合视图共用）。
+ *
+ * 单条结构不合法就丢掉这一条——少一个币种比整拍不渲染好；一项都解析不出即认不出响应。
+ */
+function parseWallets(raw: unknown): MoneyWalletView[] | null {
+  const list = Array.isArray(raw) ? raw : [];
+  const wallets: MoneyWalletView[] = [];
+  for (const item of list) {
+    if (!item || typeof item !== 'object') continue;
+    const w = item as Record<string, unknown>;
+    if (typeof w.currency !== 'string' || w.currency.length === 0) continue;
+    if (typeof w.total !== 'string' || w.total.length === 0) continue;
+    wallets.push({
+      currency: w.currency,
+      total: w.total,
+      granted: typeof w.granted === 'string' && w.granted.length > 0 ? w.granted : '0.00',
+      toppedUp: typeof w.toppedUp === 'string' && w.toppedUp.length > 0 ? w.toppedUp : '0.00',
+      fullBalance: typeof w.fullBalance === 'string' && w.fullBalance.length > 0 ? w.fullBalance : undefined,
+    });
+  }
+  return wallets.length > 0 ? wallets : null;
+}
+
+/**
+ * 可选金额：缺省或非法都返回 undefined。
+ * 今日已用与组合账户都是展示增强，数据不全时不该让整拍不渲染。
+ */
+function optMoney(value: unknown): number | undefined {
+  const n = optNum(value);
+  return typeof n === 'number' && n >= 0 ? n : undefined;
+}
+
+/**
+ * 解析组合视图的账户段（money 形态的 data 挂在 windows 数据里）。
+ * @returns 钱包与可选峰谷档位；形状不对返回 undefined（组合是增强，不整拍失败）
+ */
+function parseAccount(raw: unknown): { wallets: MoneyWalletView[]; tier?: 'peak' | 'idle' } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const a = raw as Record<string, unknown>;
+  const wallets = parseWallets(a.wallets);
+  if (!wallets) return undefined;
+  return a.tier === 'peak' || a.tier === 'idle' ? { wallets, tier: a.tier } : { wallets };
+}
+
+/**
  * 把 host 的余额原始响应（`sections.balance` 叶子）转成客户端视图。
  *
  * 形状非法或 shape 不认识返回 null，消费端据此跳过这一拍；这里不抛异常，理由见模块头。
@@ -205,12 +250,13 @@ export function toBalanceState(raw: unknown): BalanceState | null {
     const weeklyCapUsd = optNum(d.weeklyCapUsd);
     const monthlyCapUsd = optNum(d.monthlyCapUsd);
     const usage = parseUsage(d.usage);
-    // 月度窗口是这份数据的底线：缺了或非法即认不出响应，滚动窗、周窗口与各窗口额度都是可选。
-    if (monthly === undefined || monthly === null) return null;
-    // 可选窗口出现但非法，同样整拍跳过：不把坏数字送进展示层。
+    // 至少要有一个窗口才认得出响应：MiniMax 这类订阅只有 5h 与周两个窗口，没有月窗口。
+    if (monthly === undefined && rolling === undefined && weekly === undefined) return null;
+    // 出现但非法的窗口、额度与用量，同样整拍跳过：不把坏数字送进展示层。
     if (
       rolling === null ||
       weekly === null ||
+      monthly === null ||
       rollingCapUsd === null ||
       weeklyCapUsd === null ||
       monthlyCapUsd === null ||
@@ -218,6 +264,9 @@ export function toBalanceState(raw: unknown): BalanceState | null {
     ) {
       return null;
     }
+    // 组合视图的可选段：账户余额与今日已用（没有就是纯窗口视图，行为与以前一致）。
+    const account = parseAccount(d.account);
+    const todaySpend = optMoney(d.todaySpend);
     return {
       provider,
       shape: 'windows',
@@ -234,35 +283,25 @@ export function toBalanceState(raw: unknown): BalanceState | null {
       rollingResetsAt: typeof d.rollingResetsAt === 'string' ? d.rollingResetsAt : undefined,
       weeklyResetsAt: typeof d.weeklyResetsAt === 'string' ? d.weeklyResetsAt : undefined,
       monthlyResetsAt: typeof d.monthlyResetsAt === 'string' ? d.monthlyResetsAt : undefined,
+      percentMode: d.percentMode === 'remaining' ? 'remaining' : undefined,
+      ...(account === undefined
+        ? {}
+        : { accountWallets: account.wallets, ...(account.tier === undefined ? {} : { accountTier: account.tier }) }),
+      ...(todaySpend === undefined ? {} : { todaySpend }),
     };
   }
   if (r.shape === 'money') {
-    // 多币种：每项必须有 currency 与 total，granted、toppedUp 缺省记 '0.00'（只用于展示分项，
-    // 不参与档位），fullBalance 缺省表示该币种没有基准。单条结构不合法就丢掉这一条——少一个
-    // 币种比整拍不渲染好。
-    const raw = Array.isArray(d.wallets) ? d.wallets : [];
-    const wallets: MoneyWalletView[] = [];
-    for (const item of raw) {
-      if (!item || typeof item !== 'object') continue;
-      const w = item as Record<string, unknown>;
-      if (typeof w.currency !== 'string' || w.currency.length === 0) continue;
-      if (typeof w.total !== 'string' || w.total.length === 0) continue;
-      wallets.push({
-        currency: w.currency,
-        total: w.total,
-        granted: typeof w.granted === 'string' && w.granted.length > 0 ? w.granted : '0.00',
-        toppedUp: typeof w.toppedUp === 'string' && w.toppedUp.length > 0 ? w.toppedUp : '0.00',
-        fullBalance: typeof w.fullBalance === 'string' && w.fullBalance.length > 0 ? w.fullBalance : undefined,
-      });
-    }
     // 一个钱包都没有即认不出响应：host 侧空钱包是按 fetch-error 写的，走到这里说明结构坏了。
-    if (wallets.length === 0) return null;
+    const wallets = parseWallets(d.wallets);
+    if (wallets === null) return null;
+    const todaySpend = optMoney(d.todaySpend);
     return {
       provider,
       shape: 'money',
       ok: true,
       wallets,
       tier: d.tier === 'peak' || d.tier === 'idle' ? d.tier : undefined,
+      ...(todaySpend === undefined ? {} : { todaySpend }),
     };
   }
   if (r.shape === 'points') {

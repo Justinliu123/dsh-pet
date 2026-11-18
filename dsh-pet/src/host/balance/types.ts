@@ -109,11 +109,12 @@ export interface BalanceUsage {
 
 /**
  * 三窗口用量（windows 形态）：opencode 与 commandcode 共用，展示层因此共用「取最紧迫窗口」逻辑。
- * monthly 必有；rolling 与 weekly 缺省表示服务商没有该窗口，而非 0。三个满额度齐全时按剩余额度
- * 比较，否则退化为已用百分比；rollingLabel 是服务商业务事实，重置时间缺省按「已重置」处理。
+ * 三个窗口都缺省表示服务商没有该窗口；MiniMax 这类订阅只有 5h 与周两个窗口，因此 monthly 可为空。
+ * 三个满额度齐全时按剩余额度比较，否则退化为已用百分比；rollingLabel 是服务商业务事实，
+ * 重置时间缺省按「已重置」处理。percentMode 为 remaining 时文案按「剩余」呈现（进度条仍画已用）。
  */
 export interface WindowsUsage {
-  monthly: number;
+  monthly?: number;
   rolling?: number;
   weekly?: number;
   rollingCapUsd?: number;
@@ -123,6 +124,12 @@ export interface WindowsUsage {
   rollingResetsAt?: string;
   weeklyResetsAt?: string;
   monthlyResetsAt?: string;
+  /** 文案口径：缺省（或 used）按「已用 x%」；remaining 按「剩 x%」，进度条仍按已用画 */
+  percentMode?: 'used' | 'remaining';
+  /** 组合视图：同时拿到账户余额时附带的金额（DeepSeek 账号 + MiniMax 额度同屏） */
+  account?: MoneyBalance;
+  /** 今日已用（人民币；由账户余额下降推导），组合视图与 money 形态共用 */
+  todaySpend?: number;
   /** 区间累计用量（可选页）；缺省表示该服务商没有这项数据 */
   usage?: BalanceUsage;
 }
@@ -144,6 +151,8 @@ export interface MoneyWallet {
 export interface MoneyBalance {
   wallets: MoneyWallet[];
   tier?: PricingTier;
+  /** 今日已用（人民币；由账户余额下降推导；无观测数据时缺省） */
+  todaySpend?: number;
 }
 
 /**

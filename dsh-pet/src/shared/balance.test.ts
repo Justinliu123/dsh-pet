@@ -283,17 +283,19 @@ describe('commandcode —— 三窗口用量走与 opencode 同一套展示口�
     assert.equal(rows[1]?.role, 'sub');
   });
 
-  test('月度窗缺失 / 出现的字段非法 → null（不把 NaN 送进展示层）', () => {
+  test('窗口全缺 / 出现的字段非法 → null（不把 NaN 送进展示层）', () => {
     const leaf = (data: Record<string, unknown>) => ({
       ok: true,
       provider: 'commandcode',
       shape: 'windows',
       data,
     });
-    assert.equal(toBalanceState(leaf({ rolling: 10 })), null, '缺月度窗 = 认不出响应');
+    assert.equal(toBalanceState(leaf({})), null, '一个窗口都没有 = 认不出响应');
     assert.equal(toBalanceState(leaf({ monthly: 'x' })), null);
     assert.equal(toBalanceState(leaf({ monthly: 10, rolling: 'x' })), null, '5h 窗出现但非法 → 整拍跳过');
     assert.equal(toBalanceState(leaf({ monthly: 10, monthlyCapUsd: 'x' })), null);
+    // MiniMax 这类订阅只有 5h 与周两个窗口：没有月度窗也能解析（旧底线已放开）
+    assert.ok(toBalanceState(leaf({ rolling: 10, weekly: 20 })), '无月度窗但有 5h/周 → 可用');
   });
 
   test('告急窗口：满额度齐全 → 绝对口径（剩余额度最少者），与 opencode 同一规则', () => {

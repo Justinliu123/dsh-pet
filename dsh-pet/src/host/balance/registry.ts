@@ -10,11 +10,19 @@
 import { commandCode } from './providers/commandcode.ts';
 import { deepseekAccount } from './providers/deepseek-account.ts';
 import { deepseekOfficial } from './providers/deepseek-official.ts';
+import { minimaxCodingCn, minimaxCodingIntl } from './providers/minimax-coding.ts';
 import { opencodeGo } from './providers/opencode-go.ts';
 import type { BalanceProvider, PluginProvider } from './types.ts';
 
 /** 内置服务商：编译期登记，顺序即优先级。 */
-export const BUILTIN_PROVIDERS: BalanceProvider[] = [opencodeGo, commandCode, deepseekOfficial, deepseekAccount];
+export const BUILTIN_PROVIDERS: BalanceProvider[] = [
+  minimaxCodingCn,
+  minimaxCodingIntl,
+  opencodeGo,
+  commandCode,
+  deepseekOfficial,
+  deepseekAccount,
+];
 
 /** 第三方运行时登记表：provider id → 定义。 */
 const external = new Map<string, PluginProvider>();

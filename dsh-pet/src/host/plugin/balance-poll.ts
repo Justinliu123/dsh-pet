@@ -15,6 +15,8 @@ import { clampPeriodSec } from './period.ts';
 import type { ChatMemory } from './chat-memory.ts';
 import type { HostSetup } from './setup.ts';
 import type { HostContext } from './context.ts';
+import type { BalanceResult } from '../balance/types.ts';
+import type { SpendTracker } from '../spend.ts';
 
 /** 余额与周期的输入：装配期对象与更早的工厂。 */
 export type BalancePollInput = {
@@ -24,13 +26,16 @@ export type BalancePollInput = {
   Pick<ChatMemory, 'getActivePetId'> &
   Pick<HostSetup, 'log'> &
   Pick<HostSetup, 'standaloneAiBalance'> &
-  Pick<HostSetup, 'state'>;
+  Pick<HostSetup, 'state'> & {
+    /** 账户花费推导（DeepSeek 余额差 → 今日已用）：余额结果与气泡组装共用同一份 */
+    spend: SpendTracker;
+  };
 
 /**
  * 创建余额与周期。
  */
 export function createBalancePoll(deps: BalancePollInput) {
-  const { ctx, configPaths, getActivePetId, log, state, standaloneAiBalance } = deps;
+  const { ctx, configPaths, getActivePetId, log, state, standaloneAiBalance, spend } = deps;
   /** 当前生效宠物列表：成品配置拍平（合并器已保证 id 唯一、字段填满），命令与桌面模式共用。 */
   const effectivePetList = (): Record<string, unknown>[] => flattenPetList(readAllConfig(configPaths));
 
@@ -86,22 +91,27 @@ export function createBalancePoll(deps: BalancePollInput) {
       // 也不能经 DSH 的 credential store 解析，所以优先走 standaloneAi 交出来的凭证。
       const standalone = standaloneAiBalance();
       const provider = standalone?.provider || ctx.agentDefaultModel.currentSelection().provider;
-      const result = await queryBalance(
-        provider,
-        async (ref) => {
-          if (standalone?.apiKey) return standalone.apiKey;
-          const rc = await ctx.credentials.resolve(credentialRef(ref));
-          return rc?.value;
-        },
-        // `deepseek-account`（免费额度 / 平台登录）没有 API Key：它的凭证是 DSH 账号服务
-        // 持有的授权记录，只能经 getBalance 查询。账号服务是可选服务（软取，不放进 inject）
-        // ——没装账号插件时它不在场，此时该路由报 credential-missing 而不是崩。
-        async () => {
-          const account = ctx.get('deepseekAccount', false);
-          if (!account) return undefined;
-          return account.getBalance(accountClientMetadata());
-        },
-      );
+      const resolveKey = async (ref: string): Promise<string | undefined> => {
+        if (standalone?.apiKey) return standalone.apiKey;
+        const rc = await ctx.credentials.resolve(credentialRef(ref));
+        return rc?.value;
+      };
+      // `deepseek-account`（免费额度 / 平台登录）没有 API Key：它的凭证是 DSH 账号服务
+      // 持有的授权记录，只能经 getBalance 查询。账号服务是可选服务（软取，不放进 inject）
+      // ——没装账号插件时它不在场，此时该路由报 credential-missing 而不是崩。
+      const resolveAccount = async () => {
+        const account = ctx.get('deepseekAccount', false);
+        if (!account) return undefined;
+        return account.getBalance(accountClientMetadata());
+      };
+      const base = await queryBalance(provider, resolveKey, resolveAccount);
+      spend.observe(base);
+      // DeepSeek 账户余额与 MiniMax 订阅额度同屏：当前模型用哪家就先取哪家，
+      // 再把另一家作为组合段补进来；任一失败只影响自己那一段，不影响已拿到的数据。
+      const partner = partnerProviderOf(provider);
+      const extra = partner === undefined ? undefined : await queryBalance(partner, resolveKey, resolveAccount);
+      if (extra) spend.observe(extra);
+      const result = composeBalance(base, extra, spend);
       state.writeSection('balance', mark(result));
       // 失败也写 S（前端弹文字说明），日志同样留一条：否则「查了、失败了」与「根本没查」
       // 在文件里长得一模一样。成功用 info，失败用 warn（亮度不同，扫一眼就能分辨）。
@@ -149,3 +159,40 @@ export function createBalancePoll(deps: BalancePollInput) {
 }
 /** 余额与周期的产出（供下游工厂按需 Pick）。 */
 export type BalancePoll = ReturnType<typeof createBalancePoll>;
+
+/**
+ * 与当前服务商配对的另一家：DeepSeek 账户 ↔ MiniMax 订阅额度。
+ * @param provider - 当前模型服务商 id
+ * @returns 需要一并查询的服务商 id；不配对时返回 undefined（行为与以前完全一致）
+ */
+function partnerProviderOf(provider: string): string | undefined {
+  if (provider === 'deepseek-account' || provider === 'deepseek-official') return 'minimax-cn';
+  if (provider === 'minimax-cn' || provider === 'minimax') return 'deepseek-account';
+  return undefined;
+}
+
+/**
+ * 把「账户金额 + 订阅窗口」合成一条结果：窗口形态承载窗口，账户金额挂在 account 段；
+ * 只有一家成功时保持它原来的形态，只补上今日已用。
+ *
+ * @param base - 当前模型服务商的余额结果
+ * @param extra - 配对服务商的结果（可能失败或缺省）
+ * @param spend - 花费追踪器，提供今日已用
+ */
+function composeBalance(base: BalanceResult, extra: BalanceResult | undefined, spend: SpendTracker): BalanceResult {
+  const todaySpend = spend.hasObservation() ? spend.todaySpend() : undefined;
+  if (base.ok && extra !== undefined && extra.ok) {
+    if (base.shape === 'money' && extra.shape === 'windows') {
+      const data = { ...extra.data, account: base.data };
+      return { ...extra, data: todaySpend === undefined ? data : { ...data, todaySpend } } as BalanceResult;
+    }
+    if (base.shape === 'windows' && extra.shape === 'money') {
+      const data = { ...base.data, account: extra.data };
+      return { ...base, data: todaySpend === undefined ? data : { ...data, todaySpend } } as BalanceResult;
+    }
+  }
+  if (base.ok && (base.shape === 'money' || base.shape === 'windows') && todaySpend !== undefined) {
+    return { ...base, data: { ...base.data, todaySpend } } as BalanceResult;
+  }
+  return base;
+}

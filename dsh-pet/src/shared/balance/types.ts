@@ -93,6 +93,12 @@ export interface RawBalanceResult {
     rows?: unknown;
     /** custom：老两页写法的第二页，与 rows 搭配 */
     detailRows?: unknown;
+    /** windows：文案口径，remaining 表示按剩余百分比呈现 */
+    percentMode?: unknown;
+    /** windows：组合视图随数据带出的账户余额（money 形态的 data） */
+    account?: unknown;
+    /** windows / money：今日已用（人民币） */
+    todaySpend?: unknown;
     /** custom：已用百分比，缺省则不播档位动画 */
     percent?: unknown;
   };
@@ -138,6 +144,13 @@ export interface BalanceView {
   monthlyCapUsd?: number;
   /** 滚动窗展示名，由服务商自报，缺省回落到 DEFAULT_ROLLING_LABEL */
   rollingLabel?: string;
+  /** windows：文案口径；remaining 表示百分比按「剩 x%」呈现（进度条仍按已用画） */
+  percentMode?: 'used' | 'remaining';
+  /** 组合视图：同时拿到账户余额时的钱包与峰谷档位 */
+  accountWallets?: MoneyWalletView[];
+  accountTier?: PricingTier;
+  /** 今日已用（人民币；由账户余额下降推导） */
+  todaySpend?: number;
   /** windows：区间累计用量；缺省表示该服务商没有这项数据，气泡只有两页 */
   usage?: BalanceUsage;
   /** money：多币种钱包，每项一个币种 */

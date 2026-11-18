@@ -15,6 +15,7 @@ import { registerBalanceCommand } from './plugin/command-balance.ts';
 import { registerSessionWatch } from './plugin/session-watch.ts';
 import { createDesktopHelper } from './plugin/desktop-helper.ts';
 import { createBalancePoll } from './plugin/balance-poll.ts';
+import { createSpendTracker } from './spend.ts';
 import { createChatMemory } from './plugin/chat-memory.ts';
 import { generateChat } from './chat.ts';
 import { ensurePowerContextMemory } from './memory/powercontext.ts';
@@ -97,7 +98,17 @@ export function apply(ctx: any): void {
   const chatMemory = createChatMemory({ ctx, configPaths, log, memeDirsFor, playback, state, userRoot });
   const { lastWhisperAt, publishWhisper, publishSleepTalk, chatWithPet, getActivePetId, setActivePetId } = chatMemory;
 
-  const balancePoll = createBalancePoll({ ctx, configPaths, getActivePetId, log, state, standaloneAiBalance });
+  // 账户花费推导：DeepSeek 余额差 → 今日已用；余额刷新与气泡组装共用同一份账本。
+  const spendTracker = createSpendTracker({ userRoot, log });
+  const balancePoll = createBalancePoll({
+    ctx,
+    configPaths,
+    getActivePetId,
+    log,
+    state,
+    standaloneAiBalance,
+    spend: spendTracker,
+  });
   const { effectivePetList, balancePeriodSec, whisperPeriodSec, refreshBalance, resolveActivePetId, petDisplayName } =
     balancePoll;
 

@@ -27,6 +27,16 @@ export const WINDOW_LABELS = {
  */
 export const DEFAULT_ROLLING_LABEL = '5h';
 
+/**
+ * 窗口文案：按视图口径输出「已用 x%」或「剩 x%」。
+ *
+ * percent 是已用百分比（进度条与告警色都按它），percentMode 为 remaining 的服务商
+ * （如 MiniMax 只回传剩余额度）把同一数字换成剩余口径展示。
+ */
+function windowPercentText(v: BalanceView, used: number): string {
+  return v.percentMode === 'remaining' ? '剩 ' + Math.round(100 - used) + '%' : '已用 ' + Math.round(used) + '%';
+}
+
 /** 取窗口展示名：滚动窗用服务商自报值，周与月走固定表 */
 function windowLabel(v: BalanceView, w: WindowKey): string {
   if (w === 'rolling') return v.rollingLabel ?? DEFAULT_ROLLING_LABEL;
@@ -110,13 +120,33 @@ function resetPhrase(reset: string): string {
   return reset === '已重置' ? reset : reset + '重置';
 }
 
+/**
+ * 组合视图的账户行：余额（带峰谷）与今日已用。
+ *
+ * 没有账户段时什么都不加——纯窗口视图（OpenCode Go 等）行为不变。
+ */
+function accountRows(v: BalanceView): BalanceBubbleRow[] {
+  const rows: BalanceBubbleRow[] = [];
+  const wallets = (v.accountWallets ?? [])
+    .filter((w) => Number(w.total) !== 0)
+    .sort((a, b) => (a.currency === 'CNY' ? 0 : 1) - (b.currency === 'CNY' ? 0 : 1));
+  if (wallets.length > 0) {
+    const amount = wallets.map((w) => (w.currency === 'USD' ? '$' : '¥') + w.total).join('/');
+    const tier = v.accountTier === 'peak' ? '（峰）' : v.accountTier === 'idle' ? '（谷）' : '';
+    rows.push({ role: 'label', text: '余额 ' + amount + tier });
+  }
+  if (v.todaySpend !== undefined) rows.push({ role: 'sub', text: '今日已用 ¥' + v.todaySpend.toFixed(2) });
+  return rows;
+}
+
 /** 两行：最紧迫窗口的已用百分比与重置倒计时 */
 function windowsRows(v: BalanceView): BalanceBubbleRow[] {
   const w = urgentWindow(v);
   if (!w) return [{ role: 'label', text: '额度数据不可用' }];
   const reset = resetInText(w.resetsAt);
   return [
-    { role: 'label', text: w.label + '额度已用 ' + Math.round(w.percent) + '%' },
+    ...accountRows(v),
+    { role: 'label', text: w.label + '额度' + windowPercentText(v, w.percent) },
     { role: 'sub', text: resetPhrase(reset) },
   ];
 }
@@ -138,7 +168,7 @@ function windowsDetail(v: BalanceView): BalanceBubbleRow[] {
     if (percent === undefined) continue;
     // 与收起态同一套重置文案，两端原样渲染。
     const reset = resetInText(resets[w]);
-    const usedText = Math.round(percent) + '%';
+    const usedText = windowPercentText(v, percent);
     const resetText = resetPhrase(reset);
     rows.push({
       role: 'quota',

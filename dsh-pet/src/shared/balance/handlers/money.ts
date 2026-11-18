@@ -41,12 +41,16 @@ function moneyRows(v: BalanceView): BalanceBubbleRow[] {
     .sort((a, b) => (a.currency === 'CNY' ? 0 : 1) - (b.currency === 'CNY' ? 0 : 1));
   const amount =
     visible.length > 0 ? visible.map((w) => (w.currency === 'USD' ? '$' : '¥') + w.total).join('/') : '¥0.00';
-  if (!v.tier) return [{ role: 'label', text: '余额 ' + amount }];
-  return [
-    { role: 'label', text: '余额（' },
-    { role: 'tier', tier: v.tier, text: v.tier === 'peak' ? '峰' : '谷' },
-    { role: 'label', text: '）' + amount },
-  ];
+  const rows: BalanceBubbleRow[] =
+    !v.tier
+      ? [{ role: 'label', text: '余额 ' + amount }]
+      : [
+          { role: 'label', text: '余额（' },
+          { role: 'tier', tier: v.tier, text: v.tier === 'peak' ? '峰' : '谷' },
+          { role: 'label', text: '）' + amount },
+        ];
+  if (v.todaySpend !== undefined) rows.push({ role: 'sub', text: '今日已用 ¥' + v.todaySpend.toFixed(2) });
+  return rows;
 }
 
 /** money 形态的展示规则：百分比按币种基准折算，收成一行业务气泡。 */
