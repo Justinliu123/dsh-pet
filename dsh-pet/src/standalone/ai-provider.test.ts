@@ -180,7 +180,7 @@ test('模型清单拉不到时退回内置候选；鉴权失败仍暴露真实�
     mode === 'auth' ? new Response('', { status: 401 }) : new Response('not found', { status: 404 })) as typeof fetch;
   await fixture(
     async (ai) => {
-      await ai.saveSettings({ service: 'deepseek-official', keys: { DEEPSEEK_API_KEY: 'ds-key' } });
+      await ai.saveSettings({ service: 'deepseek-official', keys: { DEEPSEEK_API_KEY: 'sk-ds-key' } });
       // 端点不给 /models：退回名录里的候选，并说明为什么退化。
       const degraded = await ai.discoverModels({});
       assert.equal(degraded.ok, true, '拿不到清单也要能选模型');
@@ -201,6 +201,45 @@ test('模型清单拉不到时退回内置候选；鉴权失败仍暴露真实�
       }
     },
     fetcher,
+  );
+});
+
+test('DeepSeek 密钥不像 sk- 开头时提前拦下，不去撞 401', async () => {
+  await fixture(
+    async (ai) => {
+      await ai.saveSettings({ service: 'deepseek-official', keys: { DEEPSEEK_API_KEY: 'mm-like-key' } });
+      const denied = await ai.discoverModels({});
+      assert.equal(denied.ok, false);
+      if (!denied.ok) {
+        assert.equal(denied.code, 'input');
+        assert.match(denied.message, /sk-/);
+        assert.match(denied.message, /API keys/);
+      }
+    },
+    async () => new Response(''),
+  );
+});
+
+test('401 时把服务商原话拼进提示，且不把密钥回显出去', async () => {
+  await fixture(
+    async (ai) => {
+      await ai.saveSettings({ service: 'deepseek-official', keys: { DEEPSEEK_API_KEY: 'sk-bad-tail' } });
+      const denied = await ai.discoverModels({});
+      assert.equal(denied.ok, false);
+      if (!denied.ok) {
+        assert.equal(denied.code, 'auth');
+        assert.match(denied.message, /api\.deepseek\.com/);
+        // DeepSeek 的原话会带打码后的 key 尾号，直接照抄能帮用户认出「这把不是我的」。
+        assert.match(denied.message, /Authentication Fails/);
+        assert.match(denied.message, /\*\*\*\*-tail/);
+        assert.doesNotMatch(denied.message, /sk-bad-tail/, '明文密钥不许出现在界面上');
+      }
+    },
+    async () =>
+      new Response(
+        JSON.stringify({ error: { message: 'Authentication Fails, Your api key: ****-tail is invalid' } }),
+        { status: 401 },
+      ),
   );
 });
 

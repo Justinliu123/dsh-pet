@@ -14,6 +14,15 @@ const configured = {
   },
 };
 
+test('粘贴密钥时带的 Bearer 前缀/引号外壳会被剥掉，而不是当成非法字符拒掉', () => {
+  const next = validateSettings(
+    { keys: { DEEPSEEK_API_KEY: 'Bearer sk-abc123', CUSTOM_API_KEY: '"sk-quoted"' } },
+    DEFAULT_AI_SETTINGS,
+  );
+  assert.equal(next.keys.DEEPSEEK_API_KEY, 'sk-abc123');
+  assert.equal(next.keys.CUSTOM_API_KEY, 'sk-quoted');
+});
+
 test('validates safe endpoints and explicit configuration with fixed redacted errors', () => {
   for (const baseUrl of [
     'ftp://example.test',

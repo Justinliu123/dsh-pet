@@ -11,7 +11,11 @@ const MAX_DISCOVERY_BYTES = 1_000_000;
 /** 单页条数上限；Anthropic 的 limit 参数上限就是 1000。 */
 const PAGE_LIMIT = 1000;
 
-/** 失败分类对应的可操作说明；响应正文与密钥一律不进文案。 */
+/**
+ * 失败分类对应的可操作说明。
+ * 鉴权失败会额外拼上服务商原话（见 upstreamMessage），因为同样 401，DeepSeek 说的是
+ * 「api key invalid」、代理说的是「missing credential」——只有原话能区分「key 错了」和「key 不属于这家」。
+ */
 const FAILURE_TEXT: Record<string, string | undefined> = {
   input: '请先填写接口地址与 API 密钥',
   auth: '身份验证失败 (HTTP 401/403)：请检查 API 密钥是否正确',
@@ -26,6 +30,28 @@ const FAILURE_TEXT: Record<string, string | undefined> = {
 /** 判定一个值是不是普通对象。 */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** 从上游错误正文里挖出人话；抹掉密钥本体后返回，读不出来就返回 undefined。 */
+function upstreamMessage(text: string, apiKey: string): string | undefined {
+  if (text === '') return undefined;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(text);
+  } catch {
+    return undefined;
+  }
+  const error = isRecord(payload) ? payload.error : undefined;
+  const raw =
+    isRecord(error) && typeof error.message === 'string'
+      ? error.message
+      : isRecord(payload) && typeof payload.message === 'string'
+        ? payload.message
+        : undefined;
+  if (raw === undefined) return undefined;
+  // 上游通常已把密钥打码（****abcd），这里再兜一层，避免网关把明文回显到界面上。
+  const cleaned = raw.split(apiKey).join('****').replace(/\s+/g, ' ').slice(0, 240).trim();
+  return cleaned === '' ? undefined : cleaned;
 }
 
 /** 组一份失败结果；文案只来自分类表或调用方给出的固定说明。 */
@@ -110,6 +136,7 @@ async function requestList(
   fetcher: AiFetch,
   url: string,
   headers: Record<string, string>,
+  apiKey: string,
   controller: AbortController,
 ): Promise<ModelDiscoveryResult> {
   let response: Response;
@@ -119,14 +146,25 @@ async function requestList(
     return failure(controller.signal.aborted ? 'timeout' : 'network');
   }
   if (!response.ok) {
+    // 错误正文通常只有几百字节，读一点就够；读不到就退回状态码本身。
+    let detail: string | undefined;
+    try {
+      detail = upstreamMessage((await response.text()).slice(0, 4096), apiKey);
+    } catch {
+      detail = undefined;
+    }
     if (response.status === 401 || response.status === 403) {
-      // 带上被拒的地址：用户能立刻看出是地址不对还是密钥不对（不必翻设置）。
+      // 带上被拒的地址与服务商原话：能直接区分「key 打错/过期」和「key 是别家的」。
       return failure(
         'auth',
-        `身份验证失败 (HTTP ${response.status})：${url} 拒绝了这把密钥，请确认密钥属于该服务商且未过期`,
+        `身份验证失败 (HTTP ${response.status})：${url} 拒绝了这把密钥` +
+          (detail === undefined ? '，请确认密钥属于该服务商且未过期' : `（服务商原话：${detail}）`),
       );
     }
-    return failure(response.status === 404 ? 'not-found' : 'http');
+    if (response.status !== 404) {
+      return failure('http', FAILURE_TEXT.http + (detail === undefined ? '' : `（服务商原话：${detail}）`));
+    }
+    return failure('not-found');
   }
   let text: string;
   try {
@@ -165,6 +203,14 @@ export async function discoverModels(
   if (apiKey === '') return failure('input', '请先填写 API 密钥');
   const base = parseEndpoint(rawBase);
   if (base === undefined) return failure('input', '接口地址必须是 HTTP(S) 地址，且不能含账号、查询参数或片段');
+  // DeepSeek 的密钥一律以 sk- 开头；账号登录态、别家密钥、被截断的复制都会在这里被提前拦下，
+  // 省得用户对着 401 猜。
+  if (/^api\.deepseek\.com$/i.test(new URL(base).hostname) && !apiKey.startsWith('sk-')) {
+    return failure(
+      'input',
+      'DeepSeek 的 API key 以 sk- 开头，这把不像：请到 platform.deepseek.com 的「API keys」页重新复制（账号登录 token 不能当密钥用）',
+    );
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DISCOVERY_TIMEOUT_MS);
@@ -175,7 +221,7 @@ export async function discoverModels(
     let last = failure('http');
     // 只在 404 时换下一个候选：其余失败说明地址对、但凭据或服务有问题，重试别的拼法没有意义。
     for (const url of urls) {
-      const attempt = await requestList(fetcher, url, authHeaders(protocol, apiKey, base), controller);
+      const attempt = await requestList(fetcher, url, authHeaders(protocol, apiKey, base), apiKey, controller);
       if (attempt.ok || attempt.code !== 'not-found') return attempt;
       last = attempt;
     }

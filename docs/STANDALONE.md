@@ -38,7 +38,9 @@
 | commandcode | 需自行选择 | — |
 
 - 端点不提供 `/models` 时（例如部分代理），下拉会自动退回内置候选清单并提示「已改用内置候选」；
-- 真鉴权失败时报错会带上请求地址，例如「身份验证失败 (HTTP 401)：https://api.deepseek.com/models 拒绝了这把密钥」；
+- 真鉴权失败时报错会带上请求地址**和服务商原话**，例如「身份验证失败 (HTTP 401)：https://api.deepseek.com/models 拒绝了这把密钥（服务商原话：Authentication Fails, Your api key: ****-tail is invalid）」——打码的尾号能帮你认出「这把是不是我的 key」；
+- DeepSeek 预设在地址是 `api.deepseek.com` 且密钥不以 `sk-` 开头时会直接拦下并提示：账号登录 token、别家密钥、复制被截断都会走到这里；
+- 粘贴时带的 `Bearer ` 前缀和首尾引号会自动剥掉，不会因为空白被拒；
 - 密钥里混入零宽字符/换行会被拒绝并提示重新复制（这种字符肉眼看不见，是 401 的常见原因）。
 
 ## 启用 DSH 侧插件要重启一次 DSH

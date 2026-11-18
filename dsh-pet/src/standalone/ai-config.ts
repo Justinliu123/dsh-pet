@@ -305,9 +305,33 @@ export function migrateLegacySettings(input: unknown): unknown {
  * @returns 校验并合并后的新的成品配置。
  * @throws 字段越界，或清空与写入密钥同时出现时。
  */
+/**
+ * 粘贴密钥时最常见的两种外壳：`Bearer sk-…` 与带引号的整段。
+ * 在 zod 之前归一——schema 会把空格当非法字符拒掉，用户却以为「填的是对的」。
+ */
+function stripSecretWrapper(value: string): string {
+  return value.replace(/^Bearer\s+/i, '').replace(/^["']+|["']+$/g, '').trim();
+}
+
+/** 把补丁里的密钥字段先做一次外壳归一；其余字段原样交给 zod。 */
+function normalizeSecretFields(input: unknown): unknown {
+  if (input === null || typeof input !== 'object' || Array.isArray(input)) return input;
+  const patch = { ...(input as Record<string, unknown>) };
+  const keys = patch.keys;
+  if (keys !== null && typeof keys === 'object' && !Array.isArray(keys)) {
+    const next: Record<string, unknown> = { ...(keys as Record<string, unknown>) };
+    for (const [name, value] of Object.entries(next)) {
+      if (typeof value === 'string') next[name] = stripSecretWrapper(value);
+    }
+    patch.keys = next;
+  }
+  if (typeof patch.deepseekApiKey === 'string') patch.deepseekApiKey = stripSecretWrapper(patch.deepseekApiKey);
+  return patch;
+}
+
 export function validateSettings(input: unknown, previous: Readonly<StandaloneAiSettings>): StandaloneAiSettings {
   try {
-    const patch = patchSchema.parse(input);
+    const patch = patchSchema.parse(normalizeSecretFields(input));
     const keyPatch = patch.keys;
     const written = KEY_NAMES.filter((name) => (keyPatch?.[name] ?? '') !== '');
     // 清空与写入同时出现时意图不明，直接拒绝。
