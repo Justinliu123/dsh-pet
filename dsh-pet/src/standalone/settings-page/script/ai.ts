@@ -69,7 +69,10 @@ function applyProfile(id) {
   const profile = profileOf(id);
   if (protocolSelect) protocolSelect.setValue(String(profile.protocol || 'openai-compatible'));
   byId('baseUrl').value = typeof profile.baseUrl === 'string' ? profile.baseUrl : '';
-  byId('model').value = typeof profile.model === 'string' ? profile.model : '';
+  // 没存过模型时用该家的默认模型：只填密钥就能用，不必先点一遍模型清单。
+  const saved = typeof profile.model === 'string' ? profile.model : '';
+  const fallback = typeof serviceInfo(id).defaultModel === 'string' ? serviceInfo(id).defaultModel : '';
+  byId('model').value = saved !== '' ? saved : fallback;
 }
 
 /** 把当前服务商的状态画进密钥框与余额按钮。 */
@@ -273,7 +276,7 @@ function wireSave(form, save, status) {
     setStatus(status, '正在保存到本机…');
     // 只提交当前服务商这一栏：别家的密钥与 profile 原样留在配置里。
     const keys = {};
-    const typed = byId('apiKey').value;
+    const typed = byId('apiKey').value.trim();
     if (typed) keys[serviceInfo(currentService).keyName] = typed;
     const profiles = {};
     profiles[currentService] = {

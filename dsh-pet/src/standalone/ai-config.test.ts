@@ -141,6 +141,8 @@ test('旧配置迁移：地址命中某家就认那家，否则保留自定义�
   assert.equal('apiKey' in migrated, false, '统一密钥搬进分栏');
   assert.deepEqual(migrated.keys, {
     DEEPSEEK_API_KEY: 'legacy-secret',
+    MINIMAX_CN_API_KEY: '',
+    MINIMAX_API_KEY: '',
     OPENCODE_GO_API_KEY: '',
     COMMANDCODE_API_KEY: '',
     CUSTOM_API_KEY: '',
@@ -249,7 +251,8 @@ test('旧配置文件缺后加字段：铺默认值后仍可读，不因 strict 
     assert.deepEqual(store.publicSettings().profiles['deepseek-official'], {
       protocol: 'openai-compatible',
       baseUrl: 'https://api.deepseek.com',
-      model: '',
+      // 预制服务商带默认模型，「只填 key 就能用」靠它；旧配置升级时同样铺上。
+      model: 'deepseek-chat',
     });
   } finally {
     rmSync(home, { recursive: true, force: true });

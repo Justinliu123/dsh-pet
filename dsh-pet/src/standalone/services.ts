@@ -14,7 +14,7 @@ export type AiProtocol = 'openai-compatible' | 'anthropic';
 export const CUSTOM_SERVICE = 'custom' as const;
 
 /** 内置服务商 id。 */
-export type BuiltinServiceId = 'deepseek-official' | 'opencode-go' | 'commandcode';
+export type BuiltinServiceId = 'deepseek-official' | 'minimax-cn' | 'minimax' | 'opencode-go' | 'commandcode';
 
 /** 服务商 id：自定义或三家内置之一。 */
 export type ServiceId = typeof CUSTOM_SERVICE | BuiltinServiceId;
@@ -23,11 +23,19 @@ export type ServiceId = typeof CUSTOM_SERVICE | BuiltinServiceId;
  * 凭据键名：沿用 DSH 的引用名习惯，配置文件里一眼能看出属于哪家。
  * 注意 DeepSeek 的键名不带 OFFICIAL，与宿主凭据名保持一致。
  */
-export type KeyName = 'DEEPSEEK_API_KEY' | 'OPENCODE_GO_API_KEY' | 'COMMANDCODE_API_KEY' | 'CUSTOM_API_KEY';
+export type KeyName =
+  | 'DEEPSEEK_API_KEY'
+  | 'MINIMAX_CN_API_KEY'
+  | 'MINIMAX_API_KEY'
+  | 'OPENCODE_GO_API_KEY'
+  | 'COMMANDCODE_API_KEY'
+  | 'CUSTOM_API_KEY';
 
 /** 全部键名，也是 keys 表的固定形状与顺序。 */
 export const KEY_NAMES: readonly KeyName[] = [
   'DEEPSEEK_API_KEY',
+  'MINIMAX_CN_API_KEY',
+  'MINIMAX_API_KEY',
   'OPENCODE_GO_API_KEY',
   'COMMANDCODE_API_KEY',
   'CUSTOM_API_KEY',
@@ -48,6 +56,13 @@ export interface ServiceDef {
   /** 模型清单地址；缺省由 baseUrl 推导。 */
   readonly modelsUrl?: string;
   /**
+   * 该家常用的模型标识：选中服务商时预填进模型框，拉不到清单时也能直接选。
+   * 只填密钥就能用（不必先拉清单）靠的就是它；值照服务商的公开模型 id 写。
+   */
+  readonly defaultModel?: string;
+  /** 内置模型清单：端点不提供 /models（或给了 404）时作为候选，顺序即展示顺序。 */
+  readonly models?: readonly string[];
+  /**
    * 服务商要求每个请求携带的会话头名。值由传输层填一个进程内稳定的 ID；
    * opencode Go 缺这个头会直接 400（无法路由），见 https://opencode.ai/docs/console/go/ 的 Where can I use it。
    */
@@ -62,6 +77,27 @@ export const BUILTIN_SERVICES: readonly ServiceDef[] = [
     keyName: 'DEEPSEEK_API_KEY',
     protocol: 'openai-compatible',
     baseUrl: 'https://api.deepseek.com',
+    defaultModel: 'deepseek-chat',
+    models: ['deepseek-chat', 'deepseek-reasoner'],
+  },
+  {
+    id: 'minimax-cn',
+    label: 'MiniMax（国内）',
+    keyName: 'MINIMAX_CN_API_KEY',
+    protocol: 'openai-compatible',
+    // 国内站对话地址在 /v1 下；再拼 /chat/completions 就是完整端点。
+    baseUrl: 'https://api.minimaxi.com/v1',
+    defaultModel: 'MiniMax-M2.7',
+    models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3', 'MiniMax-M3.1-Flash'],
+  },
+  {
+    id: 'minimax',
+    label: 'MiniMax（国际）',
+    keyName: 'MINIMAX_API_KEY',
+    protocol: 'openai-compatible',
+    baseUrl: 'https://api.minimax.io/v1',
+    defaultModel: 'MiniMax-M2.7',
+    models: ['MiniMax-M2.7', 'MiniMax-M2.7-highspeed', 'MiniMax-M3', 'MiniMax-M3.1-Flash'],
   },
   {
     id: 'opencode-go',

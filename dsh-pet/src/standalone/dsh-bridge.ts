@@ -12,7 +12,9 @@
  *
  * @module dsh-pet/src/standalone/dsh-bridge
  */
+import { dirname } from 'node:path';
 import { readBridgeDescriptor } from '../host/plugin/bridge-descriptor.ts';
+import { createDshEndpointResolver } from './dsh-endpoint.ts';
 import { ROUTE_SEGMENT } from '../shared/constants.ts';
 
 /** 会被镜像的全局段：config/menu/focusSession 不镜像——前两者是 DSH 侧 UI 的形态，
@@ -135,6 +137,11 @@ export interface DshBridgeStatus {
 export interface DshBridgeOptions {
   readonly state: BridgeStateStore;
   readonly userRoot: string;
+  /**
+   * DSH 数据根（`~/.dsh`），用来从 DSH 日志兜底发现入口；缺省取 userRoot 的上一级。
+   * 描述文件是首选通道，日志只是「宿主侧还没公布」时的退路。
+   */
+  readonly dshHome?: string;
   readonly log: (message: string) => void;
   readonly intervalMs?: number;
   readonly fetchImpl?: typeof fetch;
@@ -154,6 +161,7 @@ export function createDshBridge(options: DshBridgeOptions): DshBridge {
   const intervalMs = options.intervalMs ?? MIRROR_INTERVAL_MS;
   const fetchImpl = options.fetchImpl ?? fetch;
   const now = options.now ?? Date.now;
+  const endpoint = createDshEndpointResolver({ dshHome: options.dshHome ?? dirname(options.userRoot) });
 
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -181,16 +189,22 @@ export function createDshBridge(options: DshBridgeOptions): DshBridge {
 
   const tick = async (): Promise<void> => {
     const descriptor = readBridgeDescriptor(options.userRoot);
-    if (descriptor === undefined) {
+    // 首选描述文件；它缺席、或刚连续失败（可能是宿主重启留下的旧端口）时，用 DSH 日志里
+    // 最后公布的入口兜底——旧版宿主半侧只公布一次，插件没重载就拿不到描述文件。
+    const origin =
+      descriptor !== undefined && consecutiveFailures === 0
+        ? descriptor.origin
+        : (endpoint.resolve() ?? descriptor?.origin);
+    if (origin === undefined) {
       disconnect();
       return;
     }
-    if (seenOrigin !== descriptor.origin) {
+    if (seenOrigin !== origin) {
       // 宿主重启/换端口：旧 counter 全部失效，重新完整镜像一遍。
       seen = createMirrorSeen();
-      seenOrigin = descriptor.origin;
+      seenOrigin = origin;
     }
-    const response = await fetchImpl(`${descriptor.origin}${ROUTE_SEGMENT}/state`, {
+    const response = await fetchImpl(`${origin}${ROUTE_SEGMENT}/state`, {
       signal: AbortSignal.timeout(MIRROR_REQUEST_TIMEOUT_MS),
     });
     if (!response.ok) throw new Error(`GET /state → HTTP ${response.status}`);
@@ -210,7 +224,7 @@ export function createDshBridge(options: DshBridgeOptions): DshBridge {
     if (!connected) {
       connected = true;
       options.log(
-        `[dsh-pet] DSH 桥已连接：${descriptor.origin}（余额/会话工作状态/通知/说话来自 DSH，独立功能照常）`,
+        `[dsh-pet] DSH 桥已连接：${origin}（余额/会话工作状态/通知/说话来自 DSH，独立功能照常）`,
       );
     }
   };
@@ -222,6 +236,8 @@ export function createDshBridge(options: DshBridgeOptions): DshBridge {
     } catch (error) {
       consecutiveFailures += 1;
       lastError = error instanceof Error ? error.message : String(error);
+      // 拿到的入口不可用（宿主已退出/端口被别人占了）：丢掉日志缓存，下一拍重新读日志。
+      endpoint.invalidate();
       if (consecutiveFailures >= MIRROR_MAX_FAILURES) disconnect(lastError);
     }
     if (stopped) return;

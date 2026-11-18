@@ -20,7 +20,14 @@ function unavailableRows(state: BalanceUnavailable): BalanceBubbleRow[] {
     state.reason === 'unsupported'
       ? [
           { role: 'error', text: '当前服务商暂不支持余额查询' },
-          { role: 'sub', text: '当前服务商：' + state.provider },
+          {
+            role: 'sub',
+            // 自定义服务商没有余额接口：直接告诉用户换成哪家，而不是只报一个 id。
+            text:
+              state.provider === 'custom'
+                ? '当前服务商：custom（AI 设置里选 DeepSeek 或 MiniMax 即可查余额；DSH 开着时也会自动同步）'
+                : '当前服务商：' + state.provider,
+          },
         ]
       : state.reason === 'credential-missing'
         ? [

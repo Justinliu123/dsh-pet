@@ -13,6 +13,7 @@ import {
   BUILTIN_SERVICES,
   CUSTOM_SERVICE,
   KEY_NAMES,
+  builtinService,
   sameEndpoint,
   serviceKeyName,
   type AiProtocol,
@@ -95,16 +96,21 @@ export interface StandaloneAiPublicSettings {
 /** 空的密钥表。 */
 const EMPTY_KEYS: Readonly<KeyMap> = Object.freeze({
   DEEPSEEK_API_KEY: '',
+  MINIMAX_CN_API_KEY: '',
+  MINIMAX_API_KEY: '',
   OPENCODE_GO_API_KEY: '',
   COMMANDCODE_API_KEY: '',
   CUSTOM_API_KEY: '',
 });
 
-/** 内置服务商的初始 profile：协议与地址取自名录，模型留空由用户选。 */
+/**
+ * 内置服务商的初始 profile：协议、地址与默认模型都取自名录。
+ * 模型预填该家的常用模型——只填密钥就能对话，不必先拉一遍清单。
+ */
 function builtinProfiles(): ProfileMap {
   const profiles = { [CUSTOM_SERVICE]: { protocol: 'openai-compatible', baseUrl: '', model: '' } } as ProfileMap;
   for (const def of BUILTIN_SERVICES) {
-    profiles[def.id] = { protocol: def.protocol, baseUrl: def.baseUrl, model: '' };
+    profiles[def.id] = { protocol: def.protocol, baseUrl: def.baseUrl, model: def.defaultModel ?? '' };
   }
   return profiles;
 }
@@ -124,10 +130,14 @@ const DEFAULT_STORED: Readonly<StoredAiSettings> = Object.freeze({
 
 /** 由落盘字段派生出当前服务商的密钥、协议、地址与模型。 */
 function derive(stored: StoredAiSettings): StandaloneAiSettings {
+  const profile = stored.profiles[stored.service];
+  const fallbackModel = builtinService(stored.service)?.defaultModel ?? '';
   return {
     ...stored,
     apiKey: stored.keys[serviceKeyName(stored.service)],
-    ...stored.profiles[stored.service],
+    ...profile,
+    // 没选过模型时用该家的默认模型：预填模型的配置被清空也能继续用。
+    model: profile.model !== '' ? profile.model : fallbackModel,
   };
 }
 
@@ -160,11 +170,19 @@ function containsControlChar(s: string): boolean {
   return false;
 }
 
-/** 密钥：不许空白与控制字符。 */
+/**
+ * 零宽/方向控制字符：复制粘贴密钥时最容易混进来的不可见字符。
+ * 它们肉眼看不出来，却会让服务商把整把密钥判成无效（401），所以在落盘前就拒掉。
+ */
+const INVISIBLE_CHARS = /[\u200b-\u200f\u2028\u2029\u2060\ufeff]/;
+
+/** 密钥：不许空白、控制字符与不可见字符。 */
 const secret = z
   .string()
   .max(4096)
-  .refine((s) => !containsControlChar(s) && !/\s/.test(s));
+  .refine((s) => !containsControlChar(s) && !/\s/.test(s) && !INVISIBLE_CHARS.test(s), {
+    message: '密钥里含有空白或不可见字符，请重新复制',
+  });
 
 /** 一个服务商 profile 的字段契约。 */
 const profileSchema = z
@@ -182,6 +200,8 @@ const profileSchema = z
 const keysSchema = z
   .object({
     DEEPSEEK_API_KEY: secret,
+    MINIMAX_CN_API_KEY: secret,
+    MINIMAX_API_KEY: secret,
     OPENCODE_GO_API_KEY: secret,
     COMMANDCODE_API_KEY: secret,
     CUSTOM_API_KEY: secret,
@@ -193,6 +213,8 @@ const profilesSchema = z
   .object({
     custom: profileSchema,
     'deepseek-official': profileSchema,
+    'minimax-cn': profileSchema,
+    minimax: profileSchema,
     'opencode-go': profileSchema,
     commandcode: profileSchema,
   })
@@ -201,7 +223,7 @@ const profilesSchema = z
 /** 落盘内容的完整校验。 */
 const persistedSchema = z
   .object({
-    service: z.enum(['custom', 'deepseek-official', 'opencode-go', 'commandcode']),
+    service: z.enum(['custom', 'deepseek-official', 'minimax-cn', 'minimax', 'opencode-go', 'commandcode']),
     keys: keysSchema,
     profiles: profilesSchema,
     maxTokens: z.number().int().min(128).max(4096),
@@ -216,7 +238,7 @@ const persistedSchema = z
 /** 设置页提交的补丁校验：全部字段可选，密钥与 profile 可以只提交其中一栏。 */
 const patchSchema = z
   .object({
-    service: z.enum(['custom', 'deepseek-official', 'opencode-go', 'commandcode']).optional(),
+    service: z.enum(['custom', 'deepseek-official', 'minimax-cn', 'minimax', 'opencode-go', 'commandcode']).optional(),
     keys: keysSchema.partial().optional(),
     profiles: profilesSchema.partial().optional(),
     maxTokens: z.number().int().min(128).max(4096).optional(),

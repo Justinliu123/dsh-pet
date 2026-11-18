@@ -127,7 +127,7 @@ test('设置视图带服务商目录；切换服务商回填该家 profile，余
       const catalog = (ai.getSettings() as unknown as { services: Array<{ id: string }> }).services;
       assert.deepEqual(
         catalog.map((entry) => entry.id),
-        ['custom', 'deepseek-official', 'opencode-go', 'commandcode'],
+        ['custom', 'deepseek-official', 'minimax-cn', 'minimax', 'opencode-go', 'commandcode'],
         '前端靠这份目录渲染下拉，不能漏项',
       );
       assert.equal(ai.balanceAuth().provider, 'custom', '默认是自定义，余额在名录外');
@@ -145,6 +145,62 @@ test('设置视图带服务商目录；切换服务商回填该家 profile，余
       assert.equal(ai.balanceAuth().apiKey, 'test-secret');
     },
     async () => new Response(''),
+  );
+});
+
+test('MiniMax 预制：只填密钥即可用，地址与默认模型都来自名录', async () => {
+  await fixture(
+    async (ai) => {
+      const services = (ai.getSettings() as unknown as {
+        services: Array<{ id: string; label: string; defaultModel?: string; keyName: string }>;
+      }).services;
+      const cn = services.find((entry) => entry.id === 'minimax-cn');
+      const intl = services.find((entry) => entry.id === 'minimax');
+      assert.ok(cn !== undefined && intl !== undefined, '国内与国际站都要在目录里');
+      assert.equal(cn.label, 'MiniMax（国内）');
+      assert.equal(cn.keyName, 'MINIMAX_CN_API_KEY');
+      assert.equal(cn.defaultModel, 'MiniMax-M2.7');
+      // 只填密钥：地址来自名录，模型用该家默认值，用户不必先拉一遍清单。
+      await ai.saveSettings({ service: 'minimax-cn', keys: { MINIMAX_CN_API_KEY: 'mm-key' } });
+      const settings = ai.getSettings();
+      assert.equal(settings.baseUrl, 'https://api.minimaxi.com/v1');
+      assert.equal(settings.model, 'MiniMax-M2.7');
+      // 对外设置不回声密钥，只留可用性判定。
+      assert.equal(ai.balanceAuth().provider, 'minimax-cn');
+      assert.equal(ai.balanceAuth().apiKey, 'mm-key');
+      assert.equal(ai.isReady(), true);
+    },
+    async () => new Response(''),
+  );
+});
+
+test('模型清单拉不到时退回内置候选；鉴权失败仍暴露真实原因', async () => {
+  let mode: 'not-found' | 'auth' = 'not-found';
+  const fetcher = (async () =>
+    mode === 'auth' ? new Response('', { status: 401 }) : new Response('not found', { status: 404 })) as typeof fetch;
+  await fixture(
+    async (ai) => {
+      await ai.saveSettings({ service: 'deepseek-official', keys: { DEEPSEEK_API_KEY: 'ds-key' } });
+      // 端点不给 /models：退回名录里的候选，并说明为什么退化。
+      const degraded = await ai.discoverModels({});
+      assert.equal(degraded.ok, true, '拿不到清单也要能选模型');
+      if (degraded.ok) {
+        assert.deepEqual(
+          degraded.models.map((model) => model.id),
+          ['deepseek-chat', 'deepseek-reasoner'],
+        );
+        assert.match(String(degraded.message), /内置候选/);
+      }
+      // 密钥被拒是真实原因，不能被候选清单盖掉。
+      mode = 'auth';
+      const denied = await ai.discoverModels({});
+      assert.equal(denied.ok, false);
+      if (!denied.ok) {
+        assert.equal(denied.code, 'auth');
+        assert.match(denied.message, /api\.deepseek\.com/, '报错要带被拒的地址');
+      }
+    },
+    fetcher,
   );
 });
 

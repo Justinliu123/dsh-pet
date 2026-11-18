@@ -43,9 +43,13 @@ export interface DiscoveredModel {
   name: string;
 }
 
-/** 「拉取模型」的结果：失败时 code 稳定，message 可直接展示。 */
+/**
+ * 「拉取模型」的结果：失败时 code 稳定，message 可直接展示。
+ * 成功也可能是退化来源（端点没给清单、退回内置候选），此时 ok 为真但带 message 说明原因。
+ */
 export type ModelDiscoveryResult =
-  { ok: true; models: DiscoveredModel[] } | { ok: false; code: string; message: string };
+  | { ok: true; models: DiscoveredModel[]; message?: string }
+  | { ok: false; code: string; message: string };
 
 /**
  * 生成通道与连接测试共享的运行态：可变字段集中在装配根，子模块只读写自己那份。

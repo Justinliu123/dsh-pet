@@ -119,8 +119,14 @@ async function requestList(
     return failure(controller.signal.aborted ? 'timeout' : 'network');
   }
   if (!response.ok) {
-    const code = response.status === 401 || response.status === 403 ? 'auth' : 'http';
-    return failure(response.status === 404 ? 'not-found' : code);
+    if (response.status === 401 || response.status === 403) {
+      // 带上被拒的地址：用户能立刻看出是地址不对还是密钥不对（不必翻设置）。
+      return failure(
+        'auth',
+        `身份验证失败 (HTTP ${response.status})：${url} 拒绝了这把密钥，请确认密钥属于该服务商且未过期`,
+      );
+    }
+    return failure(response.status === 404 ? 'not-found' : 'http');
   }
   let text: string;
   try {

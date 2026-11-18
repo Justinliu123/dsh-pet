@@ -116,7 +116,29 @@ export interface BridgeAnnounceContext {
 export interface AnnounceBridgeInput {
   readonly ctx: BridgeAnnounceContext;
   readonly userRoot: string;
-  readonly log: { info(message: string): void };
+  readonly log: { info(message: string): void; warn?(message: string): void };
+}
+
+/** 首次公布失败后的重试间隔：WebServer 的 listen 与插件 apply 谁先完成不确定，只能等。 */
+export const ANNOUNCE_RETRY_MS = 250;
+
+/** 最多重试多少次（15 秒）：再晚还没 listen 完，就不是「还没起来」而是宿主坏了。 */
+export const ANNOUNCE_MAX_ATTEMPTS = 60;
+
+/**
+ * 读一次宿主入口。
+ *
+ * 两个坑都在这里兜住：① `ctx.webServer.getOrigin` 必须用 `call(webServer)` 调，摘出来裸调会丢 this；
+ * ② 它在 listen 绑定端口之前会抛错（宿主文档明确写了），所以在 apply 期间第一次多半失败。
+ */
+function readHostOrigin(webServer: NonNullable<BridgeAnnounceContext['webServer']>): string | undefined {
+  const getOrigin = webServer.getOrigin;
+  if (typeof getOrigin !== 'function') return undefined;
+  try {
+    return normalizeBridgeOrigin(getOrigin.call(webServer));
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -124,24 +146,55 @@ export interface AnnounceBridgeInput {
  *
  * 只在「有 getOrigin 的宿主 WebServer」里公布——独立应用自己的伪 webServer 没有 getOrigin，
  * 这样同一份 apply() 两边跑也不会在独立应用里写出指向自己的描述文件。
+ *
+ * 只公布一次是不够的：插件 apply 往往早于 WebServer 的 listen，入口当时取不到；所以在这里按
+ * {@link ANNOUNCE_RETRY_MS} 重试到 {@link ANNOUNCE_MAX_ATTEMPTS} 次，拿到就写文件并停表。
+ * 停止/卸载时撤掉描述文件，免得独立应用对着一个已死的端口每秒重试（定时器一并清掉）。
  */
 export function announceDshBridge(input: AnnounceBridgeInput): BridgeDescriptor | undefined {
   if (process.env.DSH_PET_APP_MODE === '1' || process.env.DSH_PET_IN_PROCESS === '1') return undefined;
-  const getOrigin = input.ctx.webServer?.getOrigin;
-  if (typeof getOrigin !== 'function') return undefined;
-  let origin: string;
-  try {
-    const raw = getOrigin();
-    const normalized = normalizeBridgeOrigin(raw);
-    if (normalized === undefined) return undefined;
-    origin = normalized;
-  } catch {
-    // 宿主刚起、入口还没定：这一轮不公布，下一次 apply 再说。
-    return undefined;
-  }
-  const descriptor = writeBridgeDescriptor(input.userRoot, origin);
-  input.log.info(`[dsh-pet] DSH 桥已公布宿主入口：${descriptor.origin}（独立桌宠会发现并接入会话工作状态）`);
+  const webServer = input.ctx.webServer;
+  if (webServer === undefined || typeof webServer.getOrigin !== 'function') return undefined;
+
+  let published: BridgeDescriptor | undefined;
+  let attempts = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const attempt = (): void => {
+    if (published !== undefined) return;
+    attempts += 1;
+    const origin = readHostOrigin(webServer);
+    if (origin === undefined) {
+      if (attempts >= ANNOUNCE_MAX_ATTEMPTS) {
+        input.log.warn?.(
+          `[dsh-pet] DSH 桥公布入口失败：重试 ${attempts} 次仍取不到 WebServer 入口，独立桌宠将连不上本宿主`,
+        );
+        timer = undefined;
+        return;
+      }
+      timer = setTimeout(attempt, ANNOUNCE_RETRY_MS);
+      timer.unref?.();
+      return;
+    }
+    timer = undefined;
+    try {
+      published = writeBridgeDescriptor(input.userRoot, origin);
+    } catch (error) {
+      input.log.warn?.(`[dsh-pet] DSH 桥写描述文件失败：${error instanceof Error ? error.message : String(error)}`);
+      return;
+    }
+    input.log.info(`[dsh-pet] DSH 桥已公布宿主入口：${published.origin}（独立桌宠会发现并接入会话工作状态）`);
+  };
+
+  attempt();
   // 插件卸载/DSH 退出时撤掉，免得独立应用对着一个已死的端口每秒重试。
-  input.ctx.effect?.(() => () => removeBridgeDescriptor(input.userRoot, descriptor.pid), 'dsh-pet: bridge descriptor');
-  return descriptor;
+  input.ctx.effect?.(
+    () => () => {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+      if (published !== undefined) removeBridgeDescriptor(input.userRoot, published.pid);
+    },
+    'dsh-pet: bridge descriptor',
+  );
+  return published;
 }

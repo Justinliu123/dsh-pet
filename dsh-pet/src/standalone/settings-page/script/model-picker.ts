@@ -52,7 +52,8 @@ async function fetchModelOptions(trigger) {
       body: JSON.stringify({
         protocol: protocolSelect ? protocolSelect.getValue() : 'openai-compatible',
         baseUrl: byId('baseUrl').value.trim(),
-        apiKey: byId('apiKey').value,
+        // 端点对多余空白很敏感：粘贴时混进来的空格/换行会让密钥被判无效（401）。
+        apiKey: byId('apiKey').value.trim(),
       }),
     });
     if (response.status === 403) throw new Error('打开凭据已失效。请从桌宠菜单重新打开设置。');
@@ -65,7 +66,9 @@ async function fetchModelOptions(trigger) {
       return;
     }
     modelOptions = models.map((model) => ({ value: model.id, label: modelLabel(model) }));
-    setStatus(result, '已拉取 ' + models.length + ' 个模型，选中即可填入。', 'ok');
+    // 退化来源（端点没给清单）由后端给出说明，拼在成功提示前面。
+    const note = typeof data.message === 'string' && data.message !== '' ? data.message + '；' : '';
+    setStatus(result, note + '已拉取 ' + models.length + ' 个模型，选中即可填入。', 'ok');
     openModelMenu(trigger);
   } catch (error) {
     setStatus(result, error && error.message ? error.message : String(error), 'error');

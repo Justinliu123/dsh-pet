@@ -3,7 +3,7 @@
  * 纯规则用 planMirror 单测；集成用临时描述文件 + 假 fetch 跑真实 tick 循环。
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -198,6 +198,43 @@ test('桥集成：读描述文件拉 /state 写进本地仓；断链后工作状
     }
   } finally {
     rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('桥集成：没有描述文件时从 DSH 日志兜底发现入口', async () => {
+  const dshHome = mkdtempSync(join(tmpdir(), 'dsh-pet-bridge-log-'));
+  const userRoot = join(dshHome, 'dsh-pet');
+  const store = fakeStore();
+  const logs: string[] = [];
+  const fetches: string[] = [];
+  try {
+    mkdirSync(userRoot, { recursive: true });
+    mkdirSync(join(dshHome, 'logs'));
+    writeFileSync(
+      join(dshHome, 'logs', 'desktop-next.log'),
+      '[info] dsh web: http://127.0.0.1:55555/?token=****\n',
+    );
+    const bridge = createDshBridge({
+      state: store,
+      userRoot,
+      intervalMs: 5,
+      log: (message) => logs.push(message),
+      fetchImpl: (async (url: string) => {
+        fetches.push(String(url));
+        return new Response(JSON.stringify(remoteState), { status: 200 });
+      }) as unknown as typeof fetch,
+    });
+    try {
+      bridge.start();
+      await waitFor(() => bridge.status().connected === true);
+      assert.equal(fetches[0], 'http://127.0.0.1:55555/dsh-pet-7340/state');
+      assert.deepEqual(store.snapshot.sections.balance?.data, remoteState.sections?.balance?.data);
+      assert.ok(logs.some((line) => line.includes('DSH 桥已连接：http://127.0.0.1:55555')));
+    } finally {
+      bridge.stop();
+    }
+  } finally {
+    rmSync(dshHome, { recursive: true, force: true });
   }
 });
 

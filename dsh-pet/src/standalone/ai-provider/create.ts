@@ -12,6 +12,7 @@ import type {
   AiRuntime,
   AiStore,
   ModelDiscoveryInput,
+  ModelDiscoveryResult,
   StandaloneAiDependencies,
   StandaloneAiService,
 } from './types.ts';
@@ -72,6 +73,43 @@ function discoveryUrl(settings: Readonly<StandaloneAiSettings>, input: ModelDisc
   if (!def?.modelsUrl) return undefined;
   const base = (input.baseUrl !== undefined ? input.baseUrl : settings.baseUrl).trim();
   return sameEndpoint(base, def.baseUrl) ? def.modelsUrl : undefined;
+}
+
+/**
+ * 端点不给模型清单时可以用内置候选的失败原因。
+ * 只放「拿不到清单」这一类：地址不对/协议不符/网络不通/404；
+ * auth、rate-limit、input 是用户必须看到的真实原因，不能拿候选清单盖掉。
+ */
+const STATIC_FALLBACK_CODES: ReadonlySet<string> = new Set(['not-found', 'contract', 'http', 'network', 'timeout']);
+
+/**
+ * 拉模型，拉不到时退回名录里的内置候选。
+ * @param runtime - 运行态，提供传输与当前设置。
+ * @param settings - 当前成品设置。
+ * @param input - 表单草稿。
+ * @returns 端点清单，或内置候选（带 message 说明为什么退化）。
+ */
+async function discoverWithFallback(
+  runtime: AiRuntime,
+  settings: Readonly<StandaloneAiSettings>,
+  input: ModelDiscoveryInput,
+): Promise<ModelDiscoveryResult> {
+  const result = await discoverModels(runtime.fetcher, settings, {
+    ...input,
+    modelsUrl: discoveryUrl(settings, input),
+  });
+  if (result.ok) return result;
+  if (!STATIC_FALLBACK_CODES.has(result.code)) return result;
+  // 草稿地址命中某家内置服务时优先用那家的候选，否则用当前选中的服务商。
+  const base = (input.baseUrl !== undefined ? input.baseUrl : settings.baseUrl).trim();
+  const service = BUILTIN_SERVICES.find((def) => sameEndpoint(base, def.baseUrl)) ?? builtinService(settings.service);
+  const models = service?.models;
+  if (models === undefined || models.length === 0) return result;
+  return {
+    ok: true,
+    models: models.map((id) => ({ id, name: id })),
+    message: `拿不到服务商的模型清单（${result.message}），已改用内置候选；可直接选一个保存。`,
+  };
 }
 
 /**
@@ -138,10 +176,7 @@ export function createStandaloneAi(
     discoverModels: (input) =>
       runtime.disposed
         ? Promise.resolve({ ok: false, code: 'input', message: '服务已关闭' })
-        : discoverModels(runtime.fetcher, store.current(), {
-            ...input,
-            modelsUrl: discoveryUrl(store.current(), input),
-          }),
+        : discoverWithFallback(runtime, store.current(), input),
     queryBalance: async () =>
       runtime.disposed
         ? { ok: false, provider: '', reason: 'unsupported' }

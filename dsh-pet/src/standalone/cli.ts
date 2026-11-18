@@ -168,7 +168,7 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
       ? '  AI          本机 API 已启用；自动碎碎念遵循设置页开关'
       : '  AI          未配置或未启用，不发送模型请求；右键“打开 AI 设置”后在本机填写',
     ai.getSettings().service === 'custom'
-      ? '  余额        自定义服务商没有余额接口；要查余额就把服务商换成 DeepSeek 官方 / opencode Go / commandcode'
+      ? '  余额        自定义服务商没有余额接口；要查余额就把服务商换成 DeepSeek 官方 / MiniMax / opencode Go / commandcode'
       : `  余额        跟随服务商 ${serviceLabel(ai.getSettings().service)}，设置页点「查询余额」取数`,
     '  会话联动    DSH 宿主运行时自动接入工作状态/通知/余额；DSH 不在时这些沿用本地数据',
     '  退出        Ctrl+C、POST /shutdown，或桌面托盘菜单的「退出」',

@@ -44,9 +44,10 @@ interface ElectronApp {
   on(event: 'second-instance', listener: () => void): void;
   on(event: 'will-quit', listener: () => void): void;
 }
-const { app, session } = createRequire(import.meta.url)('electron') as {
+const { app, session, screen } = createRequire(import.meta.url)('electron') as {
   app: ElectronApp;
   session: { defaultSession: DesktopSession };
+  screen: { getPrimaryDisplay(): { scaleFactor: number } };
 };
 
 /** 包根目录：与 helper-process.ts 的 packageRoot 同一口径（模块所在目录的上一级） */
@@ -56,12 +57,34 @@ const helperMain = join(packageRoot, 'runtime', 'electron-helper', 'main.js');
 
 const log = (message: string): void => console.log(`[dsh-pet-app] ${message}`);
 
-/** 单实例：第二次双击直接退出（共用 userData 的 Chromium profile 会互踢） */
-const locked = app.requestSingleInstanceLock();
-if (!locked) {
-  app.exit(0);
+/**
+ * 桌面 Helper 的 DPI 探测子进程标记。
+ *
+ * 打包后的 Electron 会忽略「脚本路径」参数、直接加载本应用的 main（lib/app.js）：Helper 想用
+ * `process.execPath` 再拉一次读主屏缩放时，拿到的其实是这个入口。所以这里必须在单实例锁**之前**
+ * 认出探测标记并只打印一行就退出——否则探测子进程会被当成第二实例立即退出，Helper 只能等满
+ * 20 秒超时（那就是「双击 exe 之后要等一阵宠物才出现」的根因）。
+ * 标记与输出前缀必须跟 runtime/electron-helper/main/dpi.js、runtime/electron-helper/main.js 一致。
+ */
+const DPI_PROBE_FLAG = '--dsh-pet-dpi-probe';
+const DPI_PROBE_MARK = 'dsh-pet-primary-scale:';
+
+if (process.argv.includes(DPI_PROBE_FLAG)) {
+  // 这里不能用顶层 await：ESM 主进程的模块求值会挡住 ready 事件，`await app.whenReady()` 于是
+  // 自己等自己（死锁），探测子进程一行都不打印、Helper 只能等满 20 秒超时。改成链式回调。
+  void app.whenReady().then(() => {
+    process.stdout.write(DPI_PROBE_MARK + screen.getPrimaryDisplay().scaleFactor + '\n');
+    // 退出推迟一拍：ready 回调里直接 app.exit() 会赶在 stdout 落盘前拆掉进程
+    setTimeout(() => app.exit(0), 0);
+  });
 } else {
-  await boot();
+  /** 单实例：第二次双击直接退出（共用 userData 的 Chromium profile 会互踢） */
+  const locked = app.requestSingleInstanceLock();
+  if (!locked) {
+    app.exit(0);
+  } else {
+    await boot();
+  }
 }
 
 /**
