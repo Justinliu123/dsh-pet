@@ -409,6 +409,8 @@ Object.assign(PetSprite.prototype, {
     }
     // 点击音效与浏览器同位置：放在「按下已触发积分」的早退之后、点击动画判断之前
     playClickSound();
+    // 点本体 = 显示或推进编排气泡（余额 → 明细 → 峰谷价目，末页再点收起）；动画与音效照旧。
+    this.clickBubbleSequence();
     if (!this.animations.clicks.length) return;
     this.pendingSquash = true; // 等新点击动画切到前台后 Q 弹（压新首帧，与浏览器一致）
     this.playOnce(S.pick(this.animations.clicks));

@@ -295,6 +295,25 @@ PetSprite.prototype.toggleBalanceDetail = function toggleBalanceDetail() {
   }, BUBBLE_DURATION_MS);
 };
 
+// 点宠物本体：按「余额/额度/今日已用 → 窗口明细 → 峰谷价目」的顺序显示或推进编排气泡，
+// 末页再点收起。与 whale 挂件的冒泡编排同一手感：一次点击一页，不必去点气泡本身；点击动画与音效照旧。
+PetSprite.prototype.clickBubbleSequence = function clickBubbleSequence() {
+  const state = this.balanceState;
+  if (!state || !state.ok) return; // 还没有可用结果：这一下只播点击动画（与旧行为一致）
+  if (!this.bubbleOn) {
+    this.showBalanceNow(state, true); // 手动来源：没有百分比语义的形态也弹
+    return;
+  }
+  if (this.balanceWrap) return; // 当前是「不可用」说明气泡：只读，不翻页
+  if (!this.balanceClickable()) return;
+  if (this.balanceViewIndex + 1 >= this.balancePageCount()) {
+    this.bubbleOn = false; // 末页再点 = 收起
+    this.renderBubble();
+    return;
+  }
+  this.toggleBalanceDetail();
+};
+
 // 环境气泡（查询天气）：宿主写完 sections.env 后由 applyEnvLeaf 调到这里。
 // 睡着不弹（睡姿优先）；占用锁不挡——用户主动点的一次性查询，与手动余额同口径。
 // 计时器用自己的 envTimer：与余额共用 bubbleTimer 会互相提前收起。

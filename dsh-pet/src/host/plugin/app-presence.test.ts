@@ -78,6 +78,17 @@ test('判定运行中三个条件缺一不可：文件、心跳新鲜、pid 活�
   }
 });
 
+test('自己写的心跳不算另一只在跑（进程内宿主先亮标记再 apply）', () => {
+  const dir = tempRoot();
+  try {
+    writeAppPresence(dir, { pid: 4242 });
+    assert.equal(isStandaloneAppRunning(dir, { ignorePid: 4242, isProcessAlive: () => true }), false);
+    assert.equal(isStandaloneAppRunning(dir, { ignorePid: 9999, isProcessAlive: () => true }), true);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('坏文件一律当没有独立应用，不抛错', () => {
   const dir = tempRoot();
   try {

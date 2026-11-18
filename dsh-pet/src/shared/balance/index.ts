@@ -12,6 +12,7 @@ export * from './tone.ts';
 export * from './parse.ts';
 export * from './percent.ts';
 export * from './view.ts';
+export * from './pricing.ts';
 export * from './notice.ts';
 
 // 形态展示规则与公共窗口工具。

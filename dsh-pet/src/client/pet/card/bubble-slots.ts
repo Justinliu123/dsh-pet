@@ -16,6 +16,7 @@ import {
 import { subscribeVoiceState, subscribeVoiceUtterance, type VoiceState } from '../../../shared/voice.ts';
 import type { EnvState } from '../../../shared/state.ts';
 import { BUBBLE_DURATION_MS } from '../timings.ts';
+import { subscribePetClicked } from './pet-click.ts';
 import type { Dispatch, ReactNode, SetStateAction } from 'react';
 import type * as ReactNS from 'react';
 import type { jsx } from 'react/jsx-runtime';
@@ -260,6 +261,37 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
       // 重新计时：第 8 秒点开才剩 2 秒，看不清下一页。
       armBalanceTimeout();
     };
+
+    // 点宠物本体：第一次显示第 0 页，之后逐页推进，末页再点收起（whale 挂件的冒泡编排手感）。
+    // 这三个 ref 让订阅只建一次（订阅里读最新状态），否则每拍重订阅会漏事件。
+    const balanceOnRef = useRef(false);
+    const balancePageRef = useRef(0);
+    const balanceStateRef = useRef<BalanceState | null>(null);
+    useEffect(() => {
+      balanceOnRef.current = balanceOn;
+    }, [balanceOn]);
+    useEffect(() => {
+      balancePageRef.current = balancePage;
+    }, [balancePage]);
+    balanceStateRef.current = input.balance;
+    useEffect(
+      () =>
+        subscribePetClicked(() => {
+          const state = balanceStateRef.current;
+          // 还没有余额结果（或明确不可用）：这一下只播点击动画，不弹空气泡。
+          if (!state || !state.ok) return;
+          if (!balanceOnRef.current) {
+            showBalance();
+            return;
+          }
+          if (balancePageRef.current + 1 >= balancePageCount(state)) {
+            setBalanceOn(false); // 末页再点 = 收起
+            return;
+          }
+          cycleBalance();
+        }),
+      [],
+    );
 
     /** 环境气泡：点一次亮一次，停留时长与余额相同；重复触发先清旧定时器。 */
     const showEnv = () => {

@@ -13,6 +13,7 @@ import { DRAG_THRESHOLD, SLINGSHOT_DOUBLE_MS } from '../../../shared/constants.t
 import { createDragFollow } from './drag-follow.ts';
 import { createTouchPress } from './touch-press.ts';
 import { decideRelease } from './drag-release.ts';
+import { notifyPetClicked } from '../card/pet-click.ts';
 import type { BoxPoint } from './geometry.ts';
 import type { PhysicsParams } from '../../../shared/types.ts';
 import type * as ReactNS from 'react';
@@ -440,6 +441,9 @@ export function createDrag(card: () => DragCard): Drag {
     c.stopAutonomy();
     // 点击音效放在所有「不播点击动画」的早退分支之后。
     c.playClickSound();
+    // 点本体 = 显示或推进编排气泡（余额 → 明细 → 峰谷价目，末页再点收起），
+    // 与桌面 helper 的 clickBubbleSequence 同一套页序；动画与音效照旧。
+    notifyPetClicked();
     c.setOnce(true);
     if (!c.clickAnims.length) return;
     const name = pick(c.clickAnims);

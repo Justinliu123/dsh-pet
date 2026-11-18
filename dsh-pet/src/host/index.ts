@@ -289,7 +289,8 @@ export function apply(ctx: any): void {
   // 路由就绪后拉起桌面 Helper（Electron 缺失时仅告警，不影响 DSH 与浏览器 overlay）。
   // 独立桌宠正在渲染时只当数据源：再拉一套 Helper 会出现第二只宠物、两套托盘、两份碰撞物理。
   // 页面内 overlay 不受影响（那是浏览器里画的，不属于桌面 Helper）。
-  if (isStandaloneAppRunning(userRoot)) {
+  // 进程内宿主（独立 exe / CLI）自己先写了心跳再 apply，读到自己不算「另一只在跑」。
+  if (isStandaloneAppRunning(userRoot, { ignorePid: process.pid })) {
     log.info(
       '[dsh-pet] 检测到独立桌宠在运行：本宿主只提供会话数据，不拉起桌面 Helper（页面内 overlay 不受影响）',
     );

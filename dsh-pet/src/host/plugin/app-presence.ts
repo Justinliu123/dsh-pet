@@ -107,6 +107,8 @@ export interface StandaloneRunningOptions {
   readonly now?: number;
   readonly staleMs?: number;
   readonly isProcessAlive?: (pid: number) => boolean;
+  /** 自己写下的心跳不算「另一只独立桌宠」：进程内宿主（app/standalone）先亮标记再 apply，会读到自己。 */
+  readonly ignorePid?: number;
 }
 
 /**
@@ -118,6 +120,7 @@ export function isStandaloneAppRunning(
 ): boolean {
   const presence = readAppPresence(userRoot);
   if (presence === undefined) return false;
+  if (options.ignorePid !== undefined && presence.pid === options.ignorePid) return false;
   const now = options.now ?? Date.now();
   const staleMs = options.staleMs ?? APP_PRESENCE_STALE_MS;
   if (!isAppPresenceFresh(presence, now, staleMs)) return false;

@@ -8,6 +8,7 @@
  */
 
 import { HANDLERS } from './handlers/index.ts';
+import { pricingRows } from './pricing.ts';
 import type { BalanceBubbleRow, BalanceState, BalanceUnavailable, CustomNode } from './types.ts';
 
 /**
@@ -66,8 +67,20 @@ export function balanceDetailView(state: BalanceState): BalanceBubbleRow[] {
 }
 
 /**
+ * 余额气泡是否带峰谷价目页。
+ *
+ * 只有「窗口额度 + DeepSeek 账户余额」的组合视图才有意义：组合视图说明服务商是 DeepSeek
+ * （峰谷定价只属于它），纯窗口视图（MiniMax、OpenCode Go 等）不该看到 DeepSeek 的价目。
+ */
+export function pricingPageAvailable(state: BalanceState): boolean {
+  if (!state.ok || state.shape !== 'windows') return false;
+  return (state.accountWallets?.length ?? 0) > 0;
+}
+
+/**
  * 余额气泡的可翻页数：不可用只有一页说明；windows 至少两页（收起态 + 窗口明细），
  * 服务商给了区间用量就多一页；custom 以节点树页数为准，其余形态点开没有新内容。
+ * 组合视图（DeepSeek 账户 + 窗口额度）在末尾再多一页峰谷价目。
  *
  * 页数与 {@link balancePageView} 必须同源：两边各判一次就会翻出一页空白。
  */
@@ -75,11 +88,12 @@ export function balancePageCount(state: BalanceState): number {
   if (!state.ok) return 1;
   if (state.shape === 'custom') return Math.max(1, customViews(state)?.length ?? 1);
   if (state.shape !== 'windows') return 1;
-  return state.usage ? 3 : 2;
+  return (state.usage ? 3 : 2) + (pricingPageAvailable(state) ? 1 : 0);
 }
 
 /**
- * 指定页的气泡行数据：windows 下 0 为收起态、1 为窗口明细、2 为区间用量。
+ * 指定页的气泡行数据：windows 下 0 为收起态、1 为窗口明细、2 为区间用量，
+ * 组合视图的最后一页是峰谷价目。
  *
  * 越界页回落到最后一页有内容的页，不返回空数组——空白气泡比停在前一页更像坏了。
  */
@@ -87,6 +101,8 @@ export function balancePageView(state: BalanceState, page: number): BalanceBubbl
   if (!state.ok) return unavailableRows(state);
   const handler = HANDLERS[state.shape];
   if (state.shape !== 'windows' || page <= 0) return handler.rows(state);
+  const basePages = state.usage ? 3 : 2;
+  if (page >= basePages && pricingPageAvailable(state)) return pricingRows();
   if (page === 1 || !state.usage) return balanceDetailView(state);
   return handler.usage?.(state) ?? balanceDetailView(state);
 }
