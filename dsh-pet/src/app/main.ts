@@ -6,6 +6,7 @@
  * @module dsh-pet/src/app/main
  */
 
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,6 +57,30 @@ const packageRoot = resolve(here, '..');
 const helperMain = join(packageRoot, 'runtime', 'electron-helper', 'main.js');
 
 const log = (message: string): void => console.log(`[dsh-pet-app] ${message}`);
+
+/** 上次监听的端口记在这里：设置页地址带着端口，复用同一个端口，重启前打开的页面才不会连到死地址。 */
+const APP_PORT_FILE = 'app-port.json';
+
+/** 读上次的端口；文件缺失、损坏或数值不合理都按「没有偏好」处理。 */
+function readPreferredPort(userRoot: string): number {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(join(userRoot, APP_PORT_FILE), 'utf8'));
+    const port = (parsed as { port?: unknown } | null)?.port;
+    return typeof port === 'number' && Number.isInteger(port) && port > 1024 && port <= 65535 ? port : 0;
+  } catch {
+    return 0;
+  }
+}
+
+/** 记下这次实际用的端口；写不进去只影响下次能否复用，不该打断启动。 */
+function rememberPort(userRoot: string, port: number): void {
+  try {
+    mkdirSync(userRoot, { recursive: true });
+    writeFileSync(join(userRoot, APP_PORT_FILE), `${JSON.stringify({ port, at: new Date().toISOString() })}\n`, 'utf8');
+  } catch (error) {
+    log(`端口记录写入失败（不影响本次运行）：${String(error)}`);
+  }
+}
 
 /**
  * 桌面 Helper 的 DPI 探测子进程标记。
@@ -138,8 +163,18 @@ async function boot(): Promise<void> {
     authenticatedUrl: security.authenticatedUrl,
   });
 
-  const server = await startRouter(routes, { security, ai, log, status, landingPage });
+  // 数据根先算出来：端口偏好与宿主的 userRoot 是同一个目录。
+  const petRoot = join(dshHomeDir(), 'dsh-pet');
+  const server = await startRouter(routes, {
+    security,
+    ai,
+    log,
+    status,
+    landingPage,
+    preferredPort: readPreferredPort(petRoot),
+  });
   port = server.port;
+  rememberPort(petRoot, port);
   const origin = `http://127.0.0.1:${port}`;
   log(`本机服务 ${origin}`);
 
@@ -156,7 +191,6 @@ async function boot(): Promise<void> {
   if (!process.env.DSH_PET_SCALE) process.env.DSH_PET_SCALE = '1';
 
   // 先亮存活标记再 apply：DSH 侧宿主可能同一时刻正在 apply，看到标记才会只当数据源、不拉第二套 Helper。
-  const petRoot = join(dshHomeDir(), 'dsh-pet');
   const presence = startAppPresence(petRoot, { log });
 
   apply(context.ctx);

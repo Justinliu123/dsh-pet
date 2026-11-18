@@ -8,7 +8,7 @@
  */
 
 import { createServer } from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import type { RegisteredRoute } from '../standalone/context.ts';
 import { boundedRequest, MAX_REQUEST_BYTES, MAX_SETTINGS_BYTES } from '../standalone/request-body.ts';
@@ -34,14 +34,20 @@ interface RouterDeps {
   landingPage(port: number): string;
   /** 对话面板脚本来源；缺省读包内 `lib/chat-panel.js`，测试可注入。 */
   chatPanelScript?: () => string | undefined;
+  /**
+   * 优先监听的端口。
+   *
+   * 设置页地址里带着端口，复用上次的端口能让重启前打开的页面继续可用；端口被占用时回落随机端口。
+   */
+  preferredPort?: number;
 }
 
 /**
  * 启动本机服务并返回实际端口与关闭函数。
  *
- * 只监听 127.0.0.1 的随机端口；请求体在进入处理器前先按路由限长读取。
+ * 只监听 127.0.0.1；端口优先用 `preferredPort`，被占用时回落随机端口。请求体在进入处理器前先按路由限长读取。
  */
-export function startRouter(
+export async function startRouter(
   routes: RegisteredRoute[],
   deps: RouterDeps,
 ): Promise<{ port: number; close: () => Promise<void> }> {
@@ -160,19 +166,47 @@ export function startRouter(
   server.headersTimeout = 10000;
   server.on('clientError', (_error, socket) => socket.destroy());
 
-  return new Promise((resolvePromise, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', () => {
-      boundPort = (server.address() as AddressInfo).port;
-      resolvePromise({
-        port: boundPort,
-        close: async () => {
-          server.closeAllConnections();
-          await new Promise<void>((done) => server.close(() => done()));
-        },
-      });
+  const bound = await listenPreferred(server, deps.preferredPort ?? 0);
+  boundPort = bound;
+  return {
+    port: boundPort,
+    close: async () => {
+      server.closeAllConnections();
+      await new Promise<void>((done) => server.close(() => done()));
+    },
+  };
+}
+
+/**
+ * 先试偏好端口，被占用再让系统分配。
+ *
+ * Node 允许同一 server 在 error 之后重新 listen：EADDRINUSE 之后当前台用户再打开一次桌面版，
+ * 不应该因为上个实例的端口还被 TIME_WAIT 里的别的进程占着就整个起不来。
+ */
+async function listenPreferred(server: Server, preferred: number): Promise<number> {
+  const attempt = (port: number): Promise<number> =>
+    new Promise((resolvePromise, reject) => {
+      const onError = (error: NodeJS.ErrnoException): void => {
+        server.removeListener('listening', onListening);
+        reject(error);
+      };
+      const onListening = (): void => {
+        server.removeListener('error', onError);
+        const address = server.address() as AddressInfo;
+        resolvePromise(address.port);
+      };
+      server.once('error', onError);
+      server.once('listening', onListening);
+      server.listen(port, '127.0.0.1');
     });
-  });
+  if (preferred > 0) {
+    try {
+      return await attempt(preferred);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EADDRINUSE') throw error;
+    }
+  }
+  return attempt(0);
 }
 
 /** 写一段纯文本响应：固定关缓存与嗅探，避免页面内联脚本被当资源加载。 */

@@ -84,3 +84,11 @@ node lib/standalone.js        # 监听 3080，数据与 exe 版共用
 - 若日志里出现 `dpi probe failed: … ETIMEDOUT`（20 秒卡顿），说明 DPI 探测子进程没起来：清掉环境里的
   `ELECTRON_RUN_AS_NODE`，并确认 `lib/app.js` 里有 `--dsh-pet-dpi-probe` 分支（ESM 主进程里不能用顶层
   `await app.whenReady()`，会死锁）
+
+## 设置页连不上（Failed to fetch）
+
+桌面版每次启动都会监听一个本机端口，设置页地址里带着这个端口。**重启桌宠后，之前打开的设置页会指向旧端口**，此时点「保存」「拉取模型」都会报浏览器级的 `Failed to fetch`。
+
+- 处理：右键桌宠 →「打开 AI 设置」重新打开页面，再粘贴密钥、拉取模型。
+- 现在启动时会优先复用上次的端口（记录在 `~/.dsh/dsh-pet/app-port.json`），只要端口没被别的程序占走，重启后旧页面也能继续用。
+- 页面侧也已把这类网络错误提示成「连不上本机服务了：请从桌宠托盘菜单重新打开『打开 AI 设置』」。

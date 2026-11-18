@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { request as httpRequest } from 'node:http';
+import { createServer, request as httpRequest } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { test } from 'node:test';
 import type { RegisteredRoute } from '../standalone/context.ts';
 import { createRequestSecurity } from '../standalone/request-security.ts';
@@ -197,5 +198,28 @@ test('设置页对话面板脚本：产物缺失时 → 404 并提示重新构�
     assert.match(await response.text(), /重新构建/);
   } finally {
     await server.close();
+  }
+});
+
+test('偏好端口被占用时回落到随机端口，服务仍然可用', async () => {
+  const blocker = createServer();
+  await new Promise<void>((resolve) => blocker.listen(0, '127.0.0.1', () => resolve()));
+  const busyPort = (blocker.address() as AddressInfo).port;
+  const security = createRequestSecurity();
+  const server = await startRouter([], {
+    security,
+    log: () => {},
+    status: (port) => ({ port }),
+    landingPage: () => '<html>ok</html>',
+    preferredPort: busyPort,
+  });
+  try {
+    assert.notEqual(server.port, busyPort);
+    const response = await fetch(`http://127.0.0.1:${server.port}/health`);
+    assert.equal(response.status, 200);
+    await response.text();
+  } finally {
+    await server.close();
+    await new Promise<void>((resolve) => blocker.close(() => resolve()));
   }
 });

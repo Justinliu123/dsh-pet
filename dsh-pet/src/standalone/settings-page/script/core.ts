@@ -100,15 +100,21 @@ function markDirty(value) {
 }
 
 async function callApi(method, path, body) {
-  const response = await fetch(API + path, {
-    method: method,
-    credentials: 'same-origin',
-    cache: 'no-store',
-    headers: body
-      ? { 'X-DSH-Pet-Token': TOKEN, 'Content-Type': 'application/json' }
-      : { 'X-DSH-Pet-Token': TOKEN },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response;
+  try {
+    response = await fetch(API + path, {
+      method: method,
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: body
+        ? { 'X-DSH-Pet-Token': TOKEN, 'Content-Type': 'application/json' }
+        : { 'X-DSH-Pet-Token': TOKEN },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch {
+    // 典型情形是桌面版重启后端口变了：旧标签页里的地址已经连不上，换一句人话提示重开设置。
+    throw new Error('连不上本机服务了：请从桌宠托盘菜单重新打开「打开 AI 设置」。');
+  }
   const data = await response.json().catch(() => null);
   if (!response.ok) {
     if (response.status === 403) throw new Error('打开凭据已失效，请从桌宠菜单重新打开设置。');
