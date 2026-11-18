@@ -329,6 +329,17 @@ export function createPetMulti(
           baseline = flattenCounters(s); // 首拉只记基线，不渲染。
           // 跳会话是一次性信号：页面没开时写下的那条会被首拉基线吞掉，这里按写入时刻补一次。
           applyFocusSession(s.sections.focusSession?.data);
+          // 余额同样是状态而不是事件：首拉必须静默装进来（不弹气泡、不播动画），
+          // 否则刷新页面后点宠物不会有任何编排气泡——点击链路需要 balance 已经就位。
+          {
+            const balanceLeaf = s.sections.balance;
+            const hit = balanceLeaf === undefined || balanceLeaf.data === null ? null : readBalance(balanceLeaf);
+            if (hit) {
+              setBalance(hit.state);
+              setBalanceManual(false);
+              setBalancePetId(hit.petId);
+            }
+          }
           // 菜单项是当前状态而不是事件，首拉也必须装上，否则刷新后第三方菜单会一直为空。
           menuItemsRef.current = readMenuItems(s.sections.menu?.data, 'web');
           setMenuItems(menuItemsRef.current);

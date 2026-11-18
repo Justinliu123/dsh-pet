@@ -371,6 +371,23 @@ let stateLongPoll = true;
 
 /** 余额叶子 → 展示（成功播档位动画 + 气泡；不可用按 shared 判定弹文字说明）。
  *  叶子带 petId 时只给那只宠物（右键菜单点的那只），不带则所有开了余额的照常显示。 */
+/** 首拉时余额已经是既有事实（不是刚发生的一次指令）：静默预热，不弹气泡、不播动画。
+ *  否则首拉把 balance 记进基线后就再也不会分发，点宠物时 this.balanceState 恒为 null，
+ *  点击编排整条链路在第一行就 return —— 用户看到的就是「点击没有气泡」。 */
+function primeBalanceLeaf(leaf) {
+  const hit = S.readBalance(leaf);
+  if (!hit || !hit.state || hit.state.ok !== true) return;
+  balance = hit.state;
+  window.__dshPetDebug.lastBalanceOk = true;
+  for (const s of sprites) {
+    s.balanceState = hit.state;
+    s.balanceView = S.balanceBubbleView(hit.state);
+    s.balanceViewIndex = 0;
+    s.balanceWrap = false;
+    s.balanceManual = false;
+  }
+}
+
 function applyBalanceLeaf(leaf) {
   const hit = S.readBalance(leaf);
   if (!hit) return;
@@ -515,6 +532,8 @@ async function pollStateOnce() {
       stateBaseline = S.flattenCounters(s); // 首拉：只记基线，不渲染（避免启动/重载时重放旧气泡）
       // 第三方菜单项是状态而不是事件：首拉就要装上，否则 helper 重启后要等下次注册才出现
       applyMenuLeaf(s.sections ? s.sections.menu : null);
+      // 余额同样是状态：首拉就得静默装进 sprite，否则点击编排永远拿不到 balanceState
+      if (s.sections && s.sections.balance) primeBalanceLeaf(s.sections.balance);
       // 睡觉同样是状态：helper 重启 / 重载配置后宿主仍记着它在睡，这里必须补一次；
       // 否则渲染端显示醒着，而宿主因「已在睡」不回写叶子，只能等宿主重启才恢复。
       for (const [petId, entry] of Object.entries((s && s.pets) || {})) {
