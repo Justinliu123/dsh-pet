@@ -6,8 +6,10 @@
  * @module dsh-pet/src/client/pet/card/bubble-slots
  */
 import {
+  clickPageCount as clickPageCountOf,
   balancePageCount as balancePageCountOf,
   type BalanceState,
+  type BubbleClickStep,
   type BubblePageOptions,
 } from '../../../shared/balance/index.ts';
 import {
@@ -97,8 +99,18 @@ export function decideBubbleSlot(input: BubbleSlotInput): BubbleSlot {
  * @param balance - 最近一次余额结果；`null` 表示这一拍还没有数据。
  * @returns 页数，至少 1。
  */
-export function balancePageCount(balance: BalanceState | null, pages: BubblePageOptions = {}): number {
-  return balance ? balancePageCountOf(balance, pages) : 1;
+/** 点击编排默认队列（与 shared 的 DEFAULT_BUBBLE_CLICK_STEPS 同值；放这里避免再导一次常量）。 */
+const DEFAULT_CLICK_STEPS: readonly BubbleClickStep[] = [{ kind: 'summary' }, { kind: 'detail' }, { kind: 'pricing' }];
+
+export function balancePageCount(
+  balance: BalanceState | null,
+  pages: BubblePageOptions = {},
+  steps: readonly BubbleClickStep[] = DEFAULT_CLICK_STEPS,
+  whisperText: string | null = null,
+): number {
+  if (!balance || !balance.ok) return 1;
+  if (balance.shape === 'custom') return balancePageCountOf(balance, pages);
+  return clickPageCountOf(balance, steps, pages, whisperText);
 }
 
 /** 余额气泡组件；props 与 `client/bubble.ts` 的 BalanceBubble 一致。 */
@@ -158,6 +170,8 @@ export interface BubbleSlotsInput {
   balance: BalanceState | null;
   /** 点击编排页设置（主页固定，明细/峰谷各一个开关）；缺省全开。 */
   bubblePages?: BubblePageOptions;
+  /** 点击编排队列（来自配置 bubbleClickSteps）；缺省按 summary → detail → pricing。 */
+  bubbleSteps?: readonly BubbleClickStep[];
   /** 配置是否启用余额。 */
   balanceEnabled: boolean;
   /** 本次余额是否手动请求。 */
@@ -281,7 +295,7 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     };
 
     const cycleBalance = () => {
-      const pages = balancePageCount(input.balance, input.bubblePages);
+      const pages = balancePageCount(input.balance, input.bubblePages, input.bubbleSteps ?? DEFAULT_CLICK_STEPS, whisperText);
       setBalancePage((page) => (page + 1) % pages);
       // 重新计时：第 8 秒点开才剩 2 秒，看不清下一页。
       armBalanceTimeout();
@@ -295,6 +309,10 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     // 编排设置会随配置热更新；订阅只建一次，所以用 ref 读最新值。
     const bubblePagesRef = useRef<BubblePageOptions>({});
     bubblePagesRef.current = input.bubblePages ?? {};
+    const bubbleStepsRef = useRef<readonly BubbleClickStep[]>(DEFAULT_CLICK_STEPS);
+    bubbleStepsRef.current = input.bubbleSteps ?? DEFAULT_CLICK_STEPS;
+    // 碎碎念页要显示「最近一条」文案；同样用 ref，订阅只建一次。
+    whisperTextRef.current = whisperText;
     useEffect(() => {
       balanceOnRef.current = balanceOn;
     }, [balanceOn]);
@@ -312,7 +330,8 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
             showBalance(true);
             return;
           }
-          if (balancePageRef.current + 1 >= balancePageCount(state, bubblePagesRef.current)) {
+          const pages = balancePageCount(state, bubblePagesRef.current, bubbleStepsRef.current, whisperTextRef.current);
+          if (balancePageRef.current + 1 >= pages) {
             setBalanceOn(false); // 末页再点 = 收起
             return;
           }
@@ -427,6 +446,8 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
               index: balancePage,
               onCycle: cycleBalance,
               pages: input.bubblePages ?? {},
+              steps: input.bubbleSteps ?? DEFAULT_CLICK_STEPS,
+              whisperText,
             });
       }
       if (slot === 'whisper') {

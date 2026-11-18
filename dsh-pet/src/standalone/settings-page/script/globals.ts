@@ -18,23 +18,89 @@ function bubbleCards() {
   return [fontCard, bubbleClickCard];
 }
 
-/** 编排开关：只决定点击序列里放不放「窗口明细」「峰谷价目」两页；首页永远是余额收起态。 */
-function setBubblePage(key, value) {
-  const pages = state.globals.bubbleClickPages || { detail: true, pricing: true };
-  state.globals.bubbleClickPages = Object.assign({ detail: true, pricing: true }, pages, { [key]: value });
+/** 编排步骤目录：顺序即点击顺序；whisper 没有内容时消费端会跳过。 */
+function bubbleStepDefs() {
+  return [
+    { kind: 'summary', label: '余额 / 额度 / 今日已用', hint: '收起态：余额、今日已用、最紧迫的额度与重置时间。' },
+    { kind: 'detail', label: '窗口明细', hint: '5h 与周额度各自还剩多少、什么时候重置；服务商给了区间用量时跟在它后面。' },
+    { kind: 'pricing', label: '峰谷价目', hint: 'DeepSeek 单价（命中/未命中/输出）与距下次峰谷切换的倒计时；只有同时有账户余额与窗口额度时才有内容。' },
+    { kind: 'whisper', label: '碎碎念 / 对话', hint: '最近一条碎碎念或对话气泡；没有内容时这一步自动跳过。' },
+  ];
+}
+
+function bubbleStepLabel(kind) {
+  const defs = bubbleStepDefs();
+  for (let i = 0; i < defs.length; i += 1) if (defs[i].kind === kind) return defs[i].label;
+  return kind;
+}
+
+function bubbleStepHint(kind) {
+  const defs = bubbleStepDefs();
+  for (let i = 0; i < defs.length; i += 1) if (defs[i].kind === kind) return defs[i].hint;
+  return '';
+}
+
+/** 上移/下移一步：顺序就是点击顺序，改完立即重渲染（保存仍走下方按钮）。 */
+function moveBubbleStep(index, delta) {
+  const steps = state.globals.bubbleClickSteps || [];
+  const target = index + delta;
+  if (target < 0 || target >= steps.length) return;
+  const next = steps.slice();
+  const moved = next[index];
+  next[index] = next[target];
+  next[target] = moved;
+  state.globals.bubbleClickSteps = next;
+  markDirty(true);
+  renderBubblePanel();
+}
+
+function setBubbleStepEnabled(index, enabled) {
+  const steps = state.globals.bubbleClickSteps || [];
+  state.globals.bubbleClickSteps = steps.map(function (step, at) {
+    return at === index ? Object.assign({}, step, { enabled: enabled }) : step;
+  });
   markDirty(true);
 }
 
+function bubbleStepRow(step, index, total) {
+  const box = make('input', { type: 'checkbox', checked: step.enabled !== false });
+  box.addEventListener('change', function () {
+    setBubbleStepEnabled(index, box.checked);
+  });
+  const up = make('button', { type: 'button', class: 'btn ghost', text: '↑' });
+  up.title = '上移';
+  up.disabled = index === 0;
+  up.addEventListener('click', function () {
+    moveBubbleStep(index, -1);
+  });
+  const down = make('button', { type: 'button', class: 'btn ghost', text: '↓' });
+  down.title = '下移';
+  down.disabled = index === total - 1;
+  down.addEventListener('click', function () {
+    moveBubbleStep(index, 1);
+  });
+  return make('div', { class: 'rowCheck bubbleStep' }, [
+    box,
+    make('span', { class: 'rowCheckText' }, [
+      make('span', { class: 'rowCheckTitle', text: (index + 1) + '. ' + bubbleStepLabel(step.kind) }),
+      make('span', { class: 'rowCheckHint', text: bubbleStepHint(step.kind) }),
+    ]),
+    up,
+    down,
+  ]);
+}
+
 function bubbleClickCard() {
-  const pages = state.globals.bubbleClickPages || { detail: true, pricing: true };
+  const steps = state.globals.bubbleClickSteps || [];
+  const rows = steps.map(function (step, index) {
+    return bubbleStepRow(step, index, steps.length);
+  });
   return card(
     '点击编排',
-    '点一下宠物本体依次弹这几页，再点推进，末页再点收起（10 秒不动也会自己收）。首页固定是余额/额度/今日已用；下面两页可以关掉。',
+    '点一下宠物本体，按下面顺序一页页弹；再点推进，末页再点收起（10 秒不动也会自己收）。用 ↑ ↓ 调顺序，取消勾选就跳过这一步。',
     [
-      make('p', { class: 'fieldHint', text: '1. 余额 / 额度 / 今日已用（固定）' }),
-      toggleRow('g-bubble-detail', '第 2 页：窗口明细', '5h 与周额度各自还剩多少、什么时候重置；服务商给了区间用量时，用量页跟在它后面。', pages.detail !== false, (value) => setBubblePage('detail', value)),
-      toggleRow('g-bubble-pricing', '第 3 页：峰谷价目', 'DeepSeek 单价（命中/未命中/输出）与距下次峰谷切换的倒计时；只有同时有 DeepSeek 账户余额与窗口额度时才出现。', pages.pricing !== false, (value) => setBubblePage('pricing', value)),
-    ],
+      make('p', { class: 'fieldHint', text: '共 ' + steps.length + ' 步，至少保留一步；whisper 没有内容时自动跳过。' }),
+    ].concat(rows),
   );
 }
 

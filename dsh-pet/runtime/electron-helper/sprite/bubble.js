@@ -158,7 +158,7 @@ Object.assign(PetSprite.prototype, {
       // 每页内容与页数同源（S.balancePageView / S.balancePageCount）：不再按「index>0 即窗口明细」二分化，
       // 否则新增的用量页会和明细挤在同一页。没有读数时回落到缓存的首屏行。
       const rows = this.balanceState
-        ? S.balancePageView(this.balanceState, this.balanceViewIndex, this.bubblePages())
+        ? S.clickPageView(this.balanceState, this.balanceViewIndex, this.clickSteps(), this.bubblePages(), this.whisperText)
         : this.balanceView;
       const hasTier = rows.some((r) => r.role === 'tier');
       if (hasTier) {

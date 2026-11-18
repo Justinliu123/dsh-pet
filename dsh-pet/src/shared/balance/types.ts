@@ -250,3 +250,13 @@ export interface BalanceNoticeDecision {
   /** 本次提示的原因标识，ok 状态为 null，调用方存下供下次比较 */
   key: string | null;
 }
+
+/** 点击编排里的一步：顺序就是点宠物时依次弹的顺序（参考鲸鱼挂件的队列，这里固定为几种内置页）。 */
+export type BubblePageKind = 'summary' | 'detail' | 'pricing' | 'whisper';
+
+/** 点击编排的单步：kind 选内容，enabled=false 表示这一步先关掉（仍留在队列里方便再打开）。 */
+export interface BubbleClickStep {
+  readonly kind: BubblePageKind;
+  /** 缺键按启用。 */
+  readonly enabled?: boolean;
+}

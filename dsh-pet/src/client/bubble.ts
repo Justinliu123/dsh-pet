@@ -6,7 +6,8 @@
  * @module dsh-pet/src/client/bubble
  */
 import {
-  balancePageView,
+  clickPageView,
+  type BubbleClickStep,
   type BubblePageOptions,
   customClickable,
   customViews,
@@ -288,6 +289,8 @@ export function makeBalanceBubble(rt: {
     index,
     onCycle,
     pages = {},
+    steps,
+    whisperText = null,
   }: {
     state: BalanceState;
     on: boolean;
@@ -295,6 +298,8 @@ export function makeBalanceBubble(rt: {
     onCycle: () => void;
     /** 点击编排页设置；缺省全开（收起态 + 明细 + 峰谷）。 */
     pages?: BubblePageOptions;
+    steps?: readonly BubbleClickStep[];
+    whisperText?: string | null;
   }) {
     // shown 是实际显示页，index 是目标页；分开是为了留出淡出换内容的 250ms。
     const [shown, setShown] = useState(0);
@@ -313,7 +318,7 @@ export function makeBalanceBubble(rt: {
     const isCustom = state.ok && state.shape === 'custom';
     const views = isCustom ? customViews(state) : undefined;
     const tree = views ? views[Math.min(shown, views.length - 1)] : undefined;
-    const rows = isCustom ? [] : balancePageView(state, shown, pages);
+    const rows = isCustom ? [] : clickPageView(state, shown, steps, pages, whisperText ?? null);
     // 可点：windows 可展开；custom 只有多于 1 页才可点；其余形态点开没有新内容。
     const clickable = state.ok && (state.shape === 'windows' || (isCustom && customClickable(state)));
     // 不可用状态是多行说明，套用碎碎念的窄字号变体。

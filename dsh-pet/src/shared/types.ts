@@ -5,6 +5,8 @@
  * @module dsh-pet/src/shared/types
  */
 
+import type { BubbleClickStep } from './balance/types.ts';
+
 /** 支持的角落。 */
 export type Corner = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
@@ -139,8 +141,11 @@ export interface Pet {
   chatModel?: ModelSelection;
   /** 全局默认：字体（种类 / 字号 / 是否随宠物大小缩放） */
   font?: FontConfig;
-  /** 全局默认：点宠物本体时的气泡编排页（主页固定，明细/峰谷各一个开关） */
+  /** 全局默认：点宠物本体时的气泡编排页（主页固定，明细/峰谷各一个开关）；旧字段，仍兼容 */
   bubbleClickPages?: BubbleClickPages;
+  /** 全局默认：点宠物本体时的气泡编排队列（顺序即点击顺序，参考鲸鱼挂件的冒泡编排）。
+   *  这个字段优先于 {@link bubbleClickPages}；缺省时按 summary → detail → pricing 三步。 */
+  bubbleClickSteps?: BubbleClickStep[];
   /** 条目级：表情包清单（名称 → 给模型看的描述），合并器吹进每只实例、多实例共享。
    *  顺序即配置书写顺序，也就是 chatImageLimit 截取「前 N 张」的依据。 */
   memes?: Record<string, string>;

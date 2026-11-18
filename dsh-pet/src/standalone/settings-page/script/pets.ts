@@ -41,6 +41,27 @@ function pickMemory(raw) {
   };
 }
 
+/** 点击编排缺省队列：与消费端一致（收起 → 明细 → 峰谷）。 */
+function defaultBubbleSteps(pages) {
+  return [
+    { kind: 'summary', enabled: true },
+    { kind: 'detail', enabled: !pages || pages.detail !== false },
+    { kind: 'pricing', enabled: !pages || pages.pricing !== false },
+  ];
+}
+
+/** 点击编排队列：优先读 bubbleClickSteps，缺键时按旧的 bubbleClickPages 两开关推出默认队列。 */
+function pickBubbleSteps(source) {
+  const raw = Array.isArray(source.bubbleClickSteps) && source.bubbleClickSteps.length
+    ? source.bubbleClickSteps
+    : defaultBubbleSteps(source.bubbleClickPages);
+  const known = { summary: true, detail: true, pricing: true, whisper: true };
+  return raw.slice(0, 8).map(function (step) {
+    const kind = step && typeof step.kind === 'string' && known[step.kind] ? step.kind : 'summary';
+    return { kind: kind, enabled: !step || step.enabled !== false };
+  });
+}
+
 function pickGlobals(main) {
   const source = main || {};
   const physics = source.physics && typeof source.physics === 'object' ? source.physics : null;
@@ -77,6 +98,7 @@ function pickGlobals(main) {
       detail: !source.bubbleClickPages || source.bubbleClickPages.detail !== false,
       pricing: !source.bubbleClickPages || source.bubbleClickPages.pricing !== false,
     },
+    bubbleClickSteps: pickBubbleSteps(source),
     chatMemoryRounds: Number.isFinite(Number(source.chatMemoryRounds)) ? Number(source.chatMemoryRounds) : 0,
     chatImageLimit: Number.isFinite(Number(source.chatImageLimit)) ? Number(source.chatImageLimit) : 0,
     animationWeights: pickWeights(source.animationWeights),
@@ -174,6 +196,19 @@ function physicsBody() {
   return out;
 }
 
+/** 兼容旧字段：从队列里反推「明细/峰谷」开关，老版本消费端也认。 */
+function bubblePagesFromSteps() {
+  const steps = state.globals.bubbleClickSteps || [];
+  let detail = false;
+  let pricing = false;
+  for (let i = 0; i < steps.length; i += 1) {
+    if (steps[i].enabled === false) continue;
+    if (steps[i].kind === 'detail') detail = true;
+    if (steps[i].kind === 'pricing') pricing = true;
+  }
+  return { detail: detail, pricing: pricing };
+}
+
 function petsBody() {
   return Object.assign({ pets: state.pets.main }, {
     notificationsEnabled: state.globals.notificationsEnabled,
@@ -198,7 +233,8 @@ function petsBody() {
     environmentCity: state.globals.environmentCity || '',
     physics: physicsBody(),
     font: state.globals.font,
-    bubbleClickPages: state.globals.bubbleClickPages,
+    bubbleClickPages: bubblePagesFromSteps(),
+    bubbleClickSteps: state.globals.bubbleClickSteps,
     chatMemoryRounds: state.globals.chatMemoryRounds,
     chatImageLimit: state.globals.chatImageLimit,
     animationWeights: state.globals.animationWeights,

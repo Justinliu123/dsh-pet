@@ -152,6 +152,23 @@ export function bubbleClickPagesValid(value: unknown): boolean {
   return true;
 }
 
+/** 点击编排队列允许的步骤种类（与设置页「气泡 → 点击编排」的行一一对应）。 */
+export const BUBBLE_STEP_KINDS = ['summary', 'detail', 'pricing', 'whisper'] as const;
+
+/** bubbleClickSteps 段校验：非空数组、最多 8 步，每步 { kind 在白名单里, enabled? 布尔 }。
+ *  未知子键忽略；kind 写错即整段非法（告警 + 取默认）。 */
+export function bubbleClickStepsValid(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length === 0 || value.length > 8) return false;
+  for (const step of value) {
+    if (!step || typeof step !== 'object' || Array.isArray(step)) return false;
+    const row = step as Record<string, unknown>;
+    if (typeof row.kind !== 'string') return false;
+    if (!(BUBBLE_STEP_KINDS as readonly string[]).includes(row.kind)) return false;
+    if (row.enabled !== undefined && typeof row.enabled !== 'boolean') return false;
+  }
+  return true;
+}
+
 /** 长期记忆段校验：provider 非空、powercontext 三项齐全且合法。
  *  与 font 同口径：整段校验——provider 缺失或任一子键非法即整段非法（告警 + 取默认），不逐子键补默认。
  *  provider 只判形态（存在性由运行时解析时判），endpoint 只判协议前缀（能不能连上是运行时的事）。 */
@@ -262,6 +279,8 @@ export function topFieldValid(key: string, value: unknown): boolean {
       return fontValid(value);
     case 'bubbleClickPages':
       return bubbleClickPagesValid(value);
+    case 'bubbleClickSteps':
+      return bubbleClickStepsValid(value);
     case 'whisperModel':
     case 'chatModel':
       return modelSelectionValid(value);

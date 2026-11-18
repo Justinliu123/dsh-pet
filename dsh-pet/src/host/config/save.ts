@@ -11,7 +11,7 @@ import { dirname } from 'node:path';
 import { CORNER_SET, isValidPetId, PET_DISPLAY_SET } from './constants.ts';
 import { isValidSizePercent } from '../../shared/pet-size.ts';
 import type { ConfigPaths } from './constants.ts';
-import { bubbleClickPagesValid, fontValid, modelSelectionValid, physicsValid, topFieldValid } from './validate.ts';
+import { bubbleClickPagesValid, bubbleClickStepsValid, fontValid, modelSelectionValid, physicsValid, topFieldValid } from './validate.ts';
 import type { MemoryConfig } from '../../shared/memory.ts';
 
 /**
@@ -156,6 +156,10 @@ export function saveUserConfig(
   // 与 font 同一套语义——传了就整段校验后进白名单，没传则走透传保留；落盘只留两个布尔子键。
   const bcp = o.bubbleClickPages;
   if (bcp !== undefined && !bubbleClickPagesValid(bcp)) return null;
+  // bubbleClickSteps（点宠物本体的气泡编排队列：顺序即点击顺序，参考鲸鱼挂件的冒泡编排）：
+  // 与 bubbleClickPages 同语义，但队列优先；落盘只留 { kind, enabled? }，未知子键丢弃。
+  const bcs = o.bubbleClickSteps;
+  if (bcs !== undefined && !bubbleClickStepsValid(bcs)) return null;
   // whisperModel / chatModel（碎碎念 / 对话各自的服务商 + 模型；设置页两个下拉框写的就是它们）：
   // 与 physics 同一套语义——传了就整段校验后进白名单，没传则走下面的透传保留。
   // 落盘时归一化成 { provider, model } 两个 trim 过的字符串（请求体多带的键不写进用户层）。
@@ -222,6 +226,13 @@ export function saveUserConfig(
     if (typeof raw.pricing === 'boolean') cleanPages.pricing = raw.pricing;
     outConfig.bubbleClickPages = cleanPages;
   }
+  if (bcs !== undefined) {
+    outConfig.bubbleClickSteps = (bcs as Array<Record<string, unknown>>).map((step) => {
+      const row: { kind: string; enabled?: boolean } = { kind: String(step.kind) };
+      if (typeof step.enabled === 'boolean') row.enabled = step.enabled;
+      return row;
+    });
+  }
   if (wm !== undefined) outConfig.whisperModel = cleanModel(wm as Record<string, unknown>);
   if (cm !== undefined) outConfig.chatModel = cleanModel(cm as Record<string, unknown>);
   // 数值归一化落盘：请求体传 "9" 也存成 9（与读取侧 topFieldValid 的 Number() 口径一致）
@@ -253,6 +264,7 @@ export function saveUserConfig(
   if (aw !== undefined) bodyOwned.add('animationWeights');
   if (fo !== undefined) bodyOwned.add('font');
   if (bcp !== undefined) bodyOwned.add('bubbleClickPages');
+  if (bcs !== undefined) bodyOwned.add('bubbleClickSteps');
   if (wm !== undefined) bodyOwned.add('whisperModel');
   if (cm !== undefined) bodyOwned.add('chatModel');
   if (cmr !== undefined) bodyOwned.add('chatMemoryRounds');

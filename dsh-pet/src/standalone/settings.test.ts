@@ -335,6 +335,12 @@ test('settings shell is accessible, self contained, and never saves browser secr
   assert.match(settingsPage, /id="pet-save"[^>]*>保存桌宠设置/);
   assert.match(settingsPage, /id="bubble-save"[^>]*>保存气泡设置/);
   assert.match(settingsPage, /id="save"[^>]*>保存 AI 设置/);
+  // 点击编排是可排序队列：每步有上移/下移与启用勾选，不再只有两个固定开关。
+  assert.match(settingsScript, /function bubbleStepRow/);
+  assert.match(settingsScript, /function moveBubbleStep/);
+  assert.match(settingsScript, /function setBubbleStepEnabled/);
+  assert.match(settingsScript, /bubbleClickSteps/);
+  assert.doesNotMatch(settingsScript, /g-bubble-detail|g-bubble-pricing/);
   assert.match(settingsScript, /history\.replaceState/);
   assert.match(settingsScript, /X-DSH-Pet-Token/);
   assert.doesNotMatch(settingsScript, /localStorage|sessionStorage|document\.cookie|innerHTML/);

@@ -301,6 +301,15 @@ PetSprite.prototype.toggleBalanceDetail = function toggleBalanceDetail() {
 // 末页再点收起。与 whale 挂件的冒泡编排同一手感：一次点击一页，不必去点气泡本身；点击动画与音效照旧。
 // 点击编排页设置：main 条目配置里的 bubbleClickPages（明细/峰谷两个开关），
 // 缺省全开——旧配置没有这个键时行为与以前一致。
+/** 点击编排队列（配置 bubbleClickSteps）：顺序即点击顺序。缺省退回「收起 → 明细 → 峰谷」。 */
+const DEFAULT_CLICK_STEPS = [{ kind: 'summary' }, { kind: 'detail' }, { kind: 'pricing' }];
+
+PetSprite.prototype.clickSteps = function clickSteps() {
+  const steps = this.pet && this.pet.bubbleClickSteps;
+  if (!Array.isArray(steps) || steps.length === 0) return DEFAULT_CLICK_STEPS;
+  return steps;
+};
+
 PetSprite.prototype.bubblePages = function bubblePages() {
   const pages = this.pet && this.pet.bubbleClickPages;
   if (!pages || typeof pages !== 'object') return {};

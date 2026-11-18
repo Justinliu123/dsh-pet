@@ -9,7 +9,7 @@
 
 import { HANDLERS } from './handlers/index.ts';
 import { pricingRows } from './pricing.ts';
-import type { BalanceBubbleRow, BalanceState, BalanceUnavailable, CustomNode } from './types.ts';
+import type { BalanceBubbleRow, BalanceState, BalanceUnavailable, BubbleClickStep, BubblePageKind, CustomNode } from './types.ts';
 
 /**
  * 不可用状态的气泡行：显式给出原因，绝不伪造数字。
@@ -96,6 +96,92 @@ function windowPageKinds(state: BalanceState, options: BubblePageOptions): Array
   }
   if (options.pricing !== false && pricingPageAvailable(state)) kinds.push('pricing');
   return kinds;
+}
+
+/** 缺省编排：收起态（余额/额度/今日已用）→ 窗口明细 → 峰谷价目，与旧的两开关行为一致。 */
+/** 点击编排实际翻到的页：队列里的步骤 + detail 展开出的 usage 页。 */
+export type BubbleClickPage = BubblePageKind | 'usage';
+
+export const DEFAULT_BUBBLE_CLICK_STEPS: readonly BubbleClickStep[] = [
+  { kind: 'summary' },
+  { kind: 'detail' },
+  { kind: 'pricing' },
+];
+
+/** 点击编排的最终页序列：按队列顺序过滤可用性，再兜底。
+ *
+ * 规则（与设置页「气泡 → 点击编排」一一对应）：
+ * - enabled === false 的步骤跳过；同类步骤只保留第一次出现（重复不重复弹）。
+ * - detail 步骤在服务商给了区间用量时展开成「明细 + 用量」两页（页数/内容同源）。
+ * - pricing 只在「组合视图」（有 DeepSeek 账户余额 + 窗口额度）时可用；
+ *   whisper 页要有最近一条碎碎念文案，否则跳过（不弹空白页）。
+ * - 旧配置的 detail/pricing 开关仍然生效（options），并在新队列优先时作为兜底。
+ * - 全部被关掉时退回收起态一页，绝不让点击变成什么都没发生。
+ */
+export function clickPageKinds(
+  state: BalanceState,
+  steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
+  options: BubblePageOptions = {},
+  whisperText?: string | null,
+): BubbleClickPage[] {
+  const seen = new Set<BubblePageKind>();
+  const pages: BubbleClickPage[] = [];
+  for (const step of steps) {
+    if (step === null || typeof step !== 'object') continue;
+    if (step.enabled === false) continue;
+    const kind = step.kind;
+    if (kind !== 'summary' && kind !== 'detail' && kind !== 'pricing' && kind !== 'whisper') continue;
+    if (seen.has(kind)) continue;
+    seen.add(kind);
+    // 明细/用量只有窗口形态有；money/points 这类内置单页形态点了也只该有一页。
+    if (kind === 'detail' && (!state.ok || state.shape !== 'windows')) continue;
+    if (kind === 'detail' && options.detail === false) continue;
+    if (kind === 'pricing' && options.pricing === false) continue;
+    if (kind === 'pricing' && !pricingPageAvailable(state)) continue;
+    if (kind === 'whisper' && (whisperText === undefined || whisperText === null || whisperText === '')) continue;
+    pages.push(kind);
+    if (kind === 'detail' && state.ok && state.usage) pages.push('usage');
+  }
+  return pages.length > 0 ? pages : ['summary'];
+}
+
+/** 点击编排的总页数（custom 形态仍按节点树页数，不受队列影响）。 */
+export function clickPageCount(
+  state: BalanceState,
+  steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
+  options: BubblePageOptions = {},
+  whisperText?: string | null,
+): number {
+  if (!state.ok) return 1;
+  if (state.shape === 'custom') return Math.max(1, customViews(state)?.length ?? 1);
+  return clickPageKinds(state, steps, options, whisperText).length;
+}
+
+/**
+ * 点击编排第 index 页的气泡行：越界停在最后一页；碎碎念页直接展示文案本身。
+ *
+ * 与 {@link clickPageCount} 同源（同一个 clickPageKinds），两端翻页不会出现空白页。
+ */
+export function clickPageView(
+  state: BalanceState,
+  index: number,
+  steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
+  options: BubblePageOptions = {},
+  whisperText?: string | null,
+): BalanceBubbleRow[] {
+  if (!state.ok) return unavailableRows(state);
+  if (state.shape === 'custom') {
+    const views = customViews(state) ?? [];
+    return views.length === 0 ? [] : [];
+  }
+  const kinds = clickPageKinds(state, steps, options, whisperText);
+  const kind = kinds[Math.min(Math.max(index, 0), kinds.length - 1)];
+  const handler = HANDLERS[state.shape];
+  if (kind === 'whisper') return [{ role: 'label', text: whisperText ?? '' }];
+  if (kind === 'pricing') return pricingRows();
+  if (kind === 'detail') return balanceDetailView(state);
+  if (kind === 'usage') return handler.usage?.(state) ?? balanceDetailView(state);
+  return handler.rows(state);
 }
 
 /**
