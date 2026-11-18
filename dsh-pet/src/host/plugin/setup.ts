@@ -223,6 +223,11 @@ export function createHostSetup(ctx: HostSetupContext): HostSetup {
     },
   });
 
+  // 独立桌宠的 DSH 桥要直接读写同一份轮询状态：宿主 HTTP 路由之外没有别的写入口，
+  // 而 PetRouteDeps 的 state 是给路由内部用的。单开一个内部服务，形状稳定、不扩 petApi7340
+  // （后者是第三方注册面，加字段等于承诺兼容）。
+  ctx.provide('petBridge7340', { state });
+
   // 播放记录表（issue #122 第 3 项）：由渲染端上报驱动的状态机 + 等待者。
   // 与 S 无关：播放记录是 per-caller 资源（只有发起那次点播的调用方关心、有生命周期），
   // 塞进 1s 全局广播会让每个窗口为每个功能付流量。

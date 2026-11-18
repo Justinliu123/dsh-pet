@@ -6,6 +6,8 @@
 import { createHostSetup } from './plugin/setup.ts';
 import { readAllConfig } from './config.ts';
 import { currentEnvironment, setCityProvider } from './environment.ts';
+import { announceDshBridge } from './plugin/bridge-descriptor.ts';
+import { isStandaloneAppRunning } from './plugin/app-presence.ts';
 import { createHttpRoute, registerHttpRoute } from './plugin/http-route.ts';
 import { registerLifecycle } from './plugin/lifecycle.ts';
 import { registerChatCommand } from './plugin/command-chat.ts';
@@ -219,6 +221,9 @@ export function apply(ctx: any): void {
   const httpRoute = createHttpRoute(deps);
   registerHttpRoute(ctx, httpRoute.handlePetRoute);
 
+  // 公布宿主入口：DSH 端口每次启动随机，独立桌宠靠这份描述文件发现本宿主（见 plugin/bridge-descriptor）。
+  announceDshBridge({ ctx, userRoot, log });
+
   registerSessionWatch({
     ctx,
     cancelTerminalCleanup,
@@ -281,6 +286,14 @@ export function apply(ctx: any): void {
     stopWorkStatusFlush,
   });
 
-  // 路由就绪后拉起桌面 Helper（Electron 缺失时仅告警，不影响 DSH 与浏览器 overlay）
-  startHelper();
+  // 路由就绪后拉起桌面 Helper（Electron 缺失时仅告警，不影响 DSH 与浏览器 overlay）。
+  // 独立桌宠正在渲染时只当数据源：再拉一套 Helper 会出现第二只宠物、两套托盘、两份碰撞物理。
+  // 页面内 overlay 不受影响（那是浏览器里画的，不属于桌面 Helper）。
+  if (isStandaloneAppRunning(userRoot)) {
+    log.info(
+      '[dsh-pet] 检测到独立桌宠在运行：本宿主只提供会话数据，不拉起桌面 Helper（页面内 overlay 不受影响）',
+    );
+  } else {
+    startHelper();
+  }
 }

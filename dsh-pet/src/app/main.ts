@@ -19,6 +19,8 @@ import { packageVersion } from '../standalone/check.ts';
 import { createStandaloneContext, type RegisteredRoute } from '../standalone/context.ts';
 import { configPathsFor } from '../standalone/options.ts';
 import { createRequestSecurity } from '../standalone/request-security.ts';
+import { bridgeStateOfContext, createDshBridge } from '../standalone/dsh-bridge.ts';
+import { startAppPresence } from '../standalone/presence.ts';
 
 import { installDesktopAuth, type DesktopSession } from './desktop-auth.ts';
 import { startRouter } from './router.ts';
@@ -130,8 +132,26 @@ async function boot(): Promise<void> {
   process.env.DSH_PET_SITE_URL = security.authenticatedUrl(origin);
   if (!process.env.DSH_PET_SCALE) process.env.DSH_PET_SCALE = '1';
 
+  // 先亮存活标记再 apply：DSH 侧宿主可能同一时刻正在 apply，看到标记才会只当数据源、不拉第二套 Helper。
+  const petRoot = join(dshHomeDir(), 'dsh-pet');
+  const presence = startAppPresence(petRoot, { log });
+
   apply(context.ctx);
   log(`apply() 完成：routes=${routes.length} 失败=${context.failures.length}`);
+
+  // 状态仓由宿主半侧在 apply 里挂成 petBridge7340；桥在 apply 之后才启动（服务那时才存在）。
+  const bridgeState = bridgeStateOfContext(context.ctx);
+
+  // DSH 宿主在跑时把余额/会话工作状态/通知/说话镜像进来；DSH 不在时桥静默断开，独立功能照常。
+  const bridge =
+    bridgeState === undefined
+      ? undefined
+      : createDshBridge({ state: bridgeState, userRoot: petRoot, log });
+  if (bridge === undefined) {
+    log('提示：宿主半侧没有提供 petBridge7340 状态仓，DSH 桥未启动（不影响独立功能）');
+  } else {
+    bridge.start();
+  }
 
   // helper 读它决定建几个窗口；读不到时它会回落到单个默认窗口，首帧再由渲染端自校正
   process.env.DSH_PET_PETS = JSON.stringify(desktopPets());
@@ -161,6 +181,9 @@ async function boot(): Promise<void> {
 
   app.on('second-instance', () => log('已有一个实例在运行，忽略本次启动'));
   app.on('will-quit', () => {
+    // 桥与心跳先停：bridge.stop() 会把工作状态写回空闲，presence.stop() 清掉存活标记。
+    bridge?.stop();
+    presence.stop();
     // 退出前把最后一批日志刷出去（定时器最多 1s，这里显式补一次）
     void logger.flush();
     logger.dispose();
@@ -169,6 +192,7 @@ async function boot(): Promise<void> {
     void server.close().catch(() => undefined);
   });
 }
+
 
 /**
  * 桌面可见宠物清单（[{id,size}]）。

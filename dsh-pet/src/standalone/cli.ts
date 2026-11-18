@@ -21,6 +21,8 @@ import { writeStandaloneRuntime } from './runtime-state.ts';
 import { createStandaloneContext, type RegisteredRoute, type StandaloneLogger } from './context.ts';
 import { createStandaloneLogger } from './logger.ts';
 import { configPathsFor, describePets, isDesktopVisible, parseArgs, USAGE } from './options.ts';
+import { bridgeStateOfContext, createDshBridge, type DshBridge } from './dsh-bridge.ts';
+import { startAppPresence, type AppPresenceHandle } from './presence.ts';
 import { listenStandaloneServer } from './server.ts';
 import { serviceLabel } from './services.ts';
 import { ROUTE_SEGMENT } from '../shared/constants.ts';
@@ -89,10 +91,17 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
   }
 
   let shuttingDown = false;
+  // 独立桌宠心跳与 DSH 桥：DSH 宿主在跑时接入工作状态/通知/余额；DSH 不在时桥静默断开。
+  const petRoot = join(home, 'dsh-pet');
+  let presence: AppPresenceHandle | undefined;
+  let bridge: DshBridge | undefined;
   const shutdown = async (reason: string): Promise<void> => {
     if (shuttingDown) return;
     shuttingDown = true;
     logger.info(`收尾（${reason}）…`);
+    // 先停桥与心跳：bridge.stop() 把工作状态写回空闲，presence.stop() 清存活标记。
+    bridge?.stop();
+    presence?.stop();
     // 先释放插件注册的 effect（停 Helper、清周期定时器），再关服务。
     try {
       await context.dispose();
@@ -114,8 +123,25 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
   process.on('SIGINT', () => requestShutdown('SIGINT'));
   process.on('SIGTERM', () => requestShutdown('SIGTERM'));
 
+  // 先亮存活标记再 apply：DSH 侧宿主可能同一时刻正在 apply，看到标记才会只当数据源、不拉第二套 Helper。
+  presence = startAppPresence(petRoot, { log: (message) => logger.info(message) });
+
   // 这一句里注册路由表、状态仓与桌面 Helper（含 bridge 管道）。
   apply(context.ctx);
+
+  // 状态仓由宿主半侧在 apply 里挂成 petBridge7340，所以只能在 apply 之后取。
+  const bridgeState = bridgeStateOfContext(context.ctx);
+
+  // DSH 宿主在跑时把余额/会话工作状态/通知/说话镜像进来；DSH 不在时桥静默断开，独立功能照常。
+  bridge =
+    bridgeState === undefined
+      ? undefined
+      : createDshBridge({ state: bridgeState, userRoot: petRoot, log: (message) => logger.info(message) });
+  if (bridge === undefined) {
+    logger.info('提示：宿主半侧没有提供 petBridge7340 状态仓，DSH 桥未启动（不影响独立功能）');
+  } else {
+    bridge.start();
+  }
 
   let pets: Record<string, unknown>[] = [];
   let configSource = paths.userFile;
@@ -144,7 +170,7 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
     ai.getSettings().service === 'custom'
       ? '  余额        自定义服务商没有余额接口；要查余额就把服务商换成 DeepSeek 官方 / opencode Go / commandcode'
       : `  余额        跟随服务商 ${serviceLabel(ai.getSettings().service)}，设置页点「查询余额」取数`,
-    '  不可用      会话工作状态 / DSH 系统通知',
+    '  会话联动    DSH 宿主运行时自动接入工作状态/通知/余额；DSH 不在时这些沿用本地数据',
     '  退出        Ctrl+C、POST /shutdown，或桌面托盘菜单的「退出」',
     '',
   ]) {
