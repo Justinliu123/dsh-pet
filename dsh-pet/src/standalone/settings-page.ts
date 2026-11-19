@@ -19,6 +19,7 @@ import { DEFAULT_PHYSICS } from '../shared/physics.ts';
 import { DEFAULT_WEIGHTS } from '../shared/weights.ts';
 import {
   BUBBLE_CUSTOM_DEFAULT_ROWS,
+  BUBBLE_PRESET_PAGES,
   BUBBLE_PLACEHOLDERS,
   bubbleStepSeedTemplate,
   bubbleTemplateContext,
@@ -68,6 +69,7 @@ export const settingsScript = [
     context: bubbleTemplateContext(sampleBubbleState(), '今晚早点休息——要不要一起把今天的额度用完？'),
     defaultColor: '#e6e8ee',
     defaultRows: BUBBLE_CUSTOM_DEFAULT_ROWS,
+    presets: BUBBLE_PRESET_PAGES,
     stepSeeds: {
       summary: bubbleStepSeedTemplate('summary'),
       detail: bubbleStepSeedTemplate('detail'),

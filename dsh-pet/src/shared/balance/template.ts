@@ -166,6 +166,49 @@ export function sampleBubbleState(): BalanceState {
 }
 
 /** 新建自定义页时的默认行：一条余额 + 一条今日已用，用户再按需改。 */
+/**
+ * 内置预置页：设置页「＋ 加入编排」下拉里直接可加的那几页。
+ *
+ * 与 assets/config.jsonc 的默认三步保持一致——用户把某一页从编排里删掉后，
+ * 还能从这里原样加回来，而不是只能从头写模板。
+ */
+export interface BubblePresetPage {
+  readonly kind: BubblePageKind;
+  readonly title: string;
+  readonly rows: readonly BubbleRowTemplate[];
+}
+
+export const BUBBLE_PRESET_PAGES: readonly BubblePresetPage[] = [
+  {
+    kind: 'custom',
+    title: 'DeepSeek 余额',
+    rows: [
+      { text: 'DeepSeek 余额', color: '#203170', size: 18, align: 'center', bold: true },
+      { text: ' {balance}', color: '#4e6ab9', size: 26, align: 'center', bold: true },
+      { text: '今日已用 {todaySpend}', color: '#203170', size: 12, align: 'center' },
+      { text: '{tier} · {peakCountdown}', color: '#32716a', size: 11, align: 'center', tierColor: true },
+    ],
+  },
+  {
+    kind: 'custom',
+    title: 'MiniMax Plan 余额',
+    rows: [
+      { text: 'MiniMax Plan 余额', color: '#e4197f', size: 15, align: 'center', bold: true },
+      { text: '5h 剩余 {rolling} · {rollingReset}', color: '#e44996', size: 14, align: 'center', bold: true },
+      { text: '周剩余 {weekly} · {weeklyReset}', color: '#e25584', size: 14, align: 'center', bold: true },
+    ],
+  },
+  {
+    kind: 'pricing',
+    title: '峰谷价目',
+    rows: [
+      { text: '{peakStatus} · {peakCountdown}', size: 12, align: 'left', bold: true, tierColor: true },
+      { text: 'Flash {flashHit} / {flashMiss} / {flashOut}', size: 11, align: 'left', bold: true },
+      { text: 'Pro {proHit} / {proMiss} / {proOut}', size: 11, align: 'left', bold: true },
+    ],
+  },
+];
+
 export const BUBBLE_CUSTOM_DEFAULT_ROWS: readonly BubbleRowTemplate[] = [
   { text: '余额 {balance}', size: 14, align: 'center' },
   { text: '今日已用 {todaySpend}', size: 11, align: 'center' },

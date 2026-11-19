@@ -129,32 +129,72 @@ function addBubbleStep(kind) {
   renderBubblePanel();
 }
 
-/** 「加入编排」：列出还没在队列里的步骤。 */
+/** 队列里下一份自定义页的 id（不撞已有 id）。 */
+function nextCustomStepId() {
+  const steps = state.globals.bubbleClickSteps || [];
+  let n = 1;
+  const used = {};
+  for (let i = 0; i < steps.length; i += 1) if (steps[i].id) used[steps[i].id] = true;
+  while (used['c' + n]) n += 1;
+  return 'c' + n;
+}
+
+/**
+ * 把内置预置页加回编排：文本/颜色/字号都照预置内容带过来，加完就能直接弹。
+ *
+ * 自定义类预置每份一个新 id（可以建多份）；pricing 这种按 kind 只能有一份。
+ */
+function addBubblePreset(index) {
+  const preset = BUBBLE_PRESET_PAGES[index];
+  if (!preset) return;
+  const steps = state.globals.bubbleClickSteps || [];
+  const step = { kind: preset.kind, enabled: true, title: preset.title, template: copyBubbleRows(preset.rows) };
+  if (preset.kind === 'custom') step.id = nextCustomStepId();
+  else {
+    for (let i = 0; i < steps.length; i += 1) if (steps[i].kind === preset.kind) return;
+  }
+  state.globals.bubbleClickSteps = steps.concat([step]);
+  markDirty(true);
+  renderBubblePanel();
+}
+
+/**
+ * 「加入编排」：下拉里第一组是内置预置页（DeepSeek 余额 / MiniMax 额度 / 峰谷价目），
+ * 第二组是还没进队列的通用步骤（碎碎念）。旧的「余额 / 额度 / 今日已用」「窗口明细」
+ * 已不再作为预置提供——想要那种内容就在「新建自定义页」里自己写。
+ */
 function bubbleStepAddRow() {
   const steps = state.globals.bubbleClickSteps || [];
-  // 自定义页不在下拉里：它可以建多份，走下面的「＋ 新建自定义页」按钮。
-  const defs = bubbleStepDefs().filter(function (def) {
-    return def.kind !== 'custom';
-  });
-  const missing = defs.filter(function (def) {
-    for (let i = 0; i < steps.length; i += 1) if (steps[i].kind === def.kind) return false;
-    return true;
-  });
+  const offered = [];
+  for (let i = 0; i < BUBBLE_PRESET_PAGES.length; i += 1) {
+    const preset = BUBBLE_PRESET_PAGES[i];
+    let present = false;
+    for (let j = 0; j < steps.length; j += 1) {
+      if (steps[j].kind !== preset.kind) continue;
+      if (preset.kind !== 'custom' || steps[j].title === preset.title) present = true;
+    }
+    if (!present) offered.push({ value: 'preset:' + i, text: preset.title });
+  }
+  let whisperPresent = false;
+  for (let i = 0; i < steps.length; i += 1) if (steps[i].kind === 'whisper') whisperPresent = true;
+  if (!whisperPresent) offered.push({ value: 'kind:whisper', text: bubbleStepLabel('whisper') });
+
   const wrap = make('div', { class: 'bubbleStepAdd' });
-  if (missing.length === 0) {
-    wrap.appendChild(make('p', { class: 'fieldHint', text: '预置步骤都已经在编排里了；要调整顺序用 ↑ ↓，不想弹某一步就取消勾选。自定义页可以另建多份。' }));
-    return wrap;
-  }
   const select = make('select', { class: 'bubbleStepAddSelect' });
-  for (let i = 0; i < missing.length; i += 1) {
-    select.appendChild(make('option', { value: missing[i].kind, text: missing[i].label }));
+  for (let i = 0; i < offered.length; i += 1) {
+    select.appendChild(make('option', { value: offered[i].value, text: offered[i].text }));
   }
-  const add = make('button', { type: 'button', class: 'btn ghost', text: '＋ 加入编排' });
-  add.addEventListener('click', function () {
-    addBubbleStep(select.value);
-  });
-  wrap.appendChild(select);
-  wrap.appendChild(add);
+  if (offered.length > 0) {
+    const add = make('button', { type: 'button', class: 'btn ghost', text: '＋ 加入编排' });
+    add.addEventListener('click', function () {
+      if (select.value.indexOf('preset:') === 0) addBubblePreset(Number(select.value.slice(7)));
+      else addBubbleStep(select.value.slice(5));
+    });
+    wrap.appendChild(select);
+    wrap.appendChild(add);
+  } else {
+    wrap.appendChild(make('p', { class: 'fieldHint', text: '预置页都在编排里了；要调顺序用 ↑ ↓，不想弹某一步就取消勾选。' }));
+  }
   return wrap;
 }
 
@@ -214,7 +254,7 @@ function bubbleClickCard() {
   });
   return card(
     '点击编排',
-    '点一下宠物本体，按下面顺序一页页弹；再点推进，末页再点收起（10 秒不动也会自己收）。用 ↑ ↓ 调顺序、× 删掉某一步（下方可再加入），取消勾选只是临时跳过。每一页都能点「编辑」改内容：预置页可以换成自己的文字，自定义页可以建多份、每份各配各的。',
+    '点一下宠物本体，按下面顺序一页页弹；再点推进，末页再点收起（10 秒不动也会自己收）。用 ↑ ↓ 调顺序、× 删掉某一步（下方可再加回来，内置预置页直接选名字即可），取消勾选只是临时跳过。每一页都能点「编辑」改内容：预置页可以换成自己的文字，自定义页可以建多份、每份各配各的。',
     [
       make('p', { class: 'fieldHint', text: '共 ' + steps.length + ' 步（至少保留一步）；自定义页点「＋ 新建自定义页」创建，内容在它自己的「编辑」里配。' }),
     ].concat(blocks).concat([bubbleStepAddRow(), custom]),

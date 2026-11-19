@@ -534,3 +534,15 @@ test('模型搜索：输入即过滤，大小写无关，清空恢复全部', as
   assert.equal(first.hidden, false);
   assert.equal(second.hidden, false);
 });
+
+
+test('内置预置页：下拉里能按名字加回 DeepSeek 余额 / MiniMax 额度 / 峰谷价目', () => {
+  const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
+  assert.match(script, /var BUBBLE_PRESET_PAGES = /);
+  assert.match(script, /function addBubblePreset\(/);
+  assert.match(script, /function bubbleStepAddRow\(/);
+  assert.match(script, /DeepSeek 余额/);
+  assert.match(script, /MiniMax Plan 余额/);
+  // 旧的两类预置（摘要/窗口明细）不再出现在「加入编排」的下拉里
+  assert.doesNotMatch(script, /defs\.filter\(function \(def\) \{\s*return def\.kind !== 'custom'/);
+});

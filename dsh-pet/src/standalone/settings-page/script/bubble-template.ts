@@ -22,6 +22,12 @@ export interface BubbleTemplateScriptOptions {
   readonly defaultRows: readonly { readonly text: string; readonly size?: number; readonly align?: string }[];
   /** 预置页的编辑种子：点「编辑」时预填什么（值由 shared 的 bubbleStepSeedTemplate 提供）。 */
   readonly stepSeeds: Record<string, readonly { readonly text: string; readonly size?: number; readonly align?: string }[]>;
+  /** 内置预置页：设置页「＋ 加入编排」下拉里能直接加回来的页面（值由 shared 的 BUBBLE_PRESET_PAGES 提供）。 */
+  readonly presets: readonly {
+    readonly kind: string;
+    readonly title: string;
+    readonly rows: readonly { readonly text: string; readonly size?: number; readonly align?: string }[];
+  }[];
 }
 
 /** 生成气泡页编辑器脚本片段。 */
@@ -32,6 +38,7 @@ var SAMPLE_BUBBLE_CONTEXT = ${JSON.stringify(options.context)};
 var DEFAULT_ROW_COLOR = ${JSON.stringify(options.defaultColor)};
 var BUBBLE_CUSTOM_DEFAULT_ROWS = ${JSON.stringify(options.defaultRows)};
 var BUBBLE_STEP_SEEDS = ${JSON.stringify(options.stepSeeds)};
+var BUBBLE_PRESET_PAGES = ${JSON.stringify(options.presets)};
 var BUBBLE_ROW_ALIGNS = ['left', 'center', 'right'];
 /** 上一次查到的各预置页真实渲染结果（来自 /standalone-ai/balance 的 previews）。 */
 var BUBBLE_LIVE_PREVIEWS = null;
