@@ -97,6 +97,11 @@ export interface StandaloneAiService {
   discoverModels(input: ModelDiscoveryInput): Promise<ModelDiscoveryResult>;
   /** 按设置里选中的服务商查询余额；未选择或缺少密钥时返回显式失败，绝不伪造数字。 */
   queryBalance(): Promise<BalanceResult>;
+  /**
+   * 单独测某一家服务商的密钥（不管当前选中的是哪家）：拿它的余额接口验证一次，
+   * 草稿密钥优先、没填就用已保存的那把。自定义服务商没有余额接口，直接报不支持。
+   */
+  testProviderKey(input: TestProviderKeyInput): Promise<TestProviderKeyResult>;
   /** 余额查询要用的服务商与密钥；供宿主半侧的余额轮询取用，不进对外设置视图。 */
   balanceAuth(): { provider: string; apiKey: string; keys: Record<string, string> };
   /** 单独保存的 DeepSeek 语音密钥；空串表示没单独配。 */
@@ -105,6 +110,20 @@ export interface StandaloneAiService {
   isReady(): boolean;
   /** 终止在途请求并释放服务。 */
   dispose(): void;
+}
+
+/** 单家服务商密钥测试的入参。 */
+export interface TestProviderKeyInput {
+  /** 服务商 id（settings 视图里 services[].id）。 */
+  readonly service: string;
+  /** 草稿密钥；空串/缺省时用该服务商已保存的那把。 */
+  readonly apiKey?: string;
+}
+
+/** 单家服务商密钥测试的结果：message 可直接展示给用户。 */
+export interface TestProviderKeyResult {
+  readonly ok: boolean;
+  readonly message: string;
 }
 
 /** 可注入的传输，仅供测试替换；生产使用官方 SDK。 */

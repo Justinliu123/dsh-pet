@@ -19,8 +19,37 @@ import type {
 import { PROVIDER } from './limits.ts';
 import { discoverModels } from './list-models.ts';
 import { queryStandaloneBalance } from './balance.ts';
+import { queryProviderBalance } from './provider-balance.ts';
+import type { BalanceResult } from '../../host/balance/types.ts';
 import { createTextStream } from './stream.ts';
 import { testAiConnection } from './test-connection.ts';
+
+/**
+ * 把余额结果说成一句话：设置页「测试」按钮的反馈用它，成功才走到这里。
+ * @param result - host 半侧的归一化结果
+ * @returns 可直接展示的摘要（没有可展示数字时给一句兜底）
+ */
+function describeResult(result: Extract<BalanceResult, { ok: true }>): string {
+  const data = (result.data ?? {}) as Record<string, unknown>;
+  // 接口给剩余额度的服务商（MiniMax）在 data 里折成了「已用」，展示时按「剩 x%」还原。
+  const remaining = data.percentMode === 'remaining';
+  const percent = (value: number): string => String(remaining ? 100 - value : value);
+  const parts: string[] = [];
+  if (typeof data.rolling === 'number') {
+    parts.push(remaining ? '5h 剩 ' + percent(data.rolling) + '%' : '5h 已用 ' + percent(data.rolling) + '%');
+  }
+  if (typeof data.weekly === 'number') {
+    parts.push(remaining ? '周 剩 ' + percent(data.weekly) + '%' : '周 已用 ' + percent(data.weekly) + '%');
+  }
+  const wallets = Array.isArray(data.wallets) ? (data.wallets as Array<Record<string, unknown>>) : [];
+  for (const wallet of wallets.slice(0, 2)) {
+    if (typeof wallet.total === 'string') {
+      parts.push(String(wallet.currency ?? 'CNY') + ' 余额 ' + wallet.total);
+    }
+  }
+  if (typeof data.todaySpend === 'number') parts.push('今日已用 ' + String(data.todaySpend));
+  return parts.length > 0 ? '验证通过：' + parts.join(' · ') : '验证通过（这家没有可展示的数字）。';
+}
 
 /**
  * 设置页需要的服务商目录：与后端名录同源，前端不再抄一份地址。
@@ -185,6 +214,32 @@ export function createStandaloneAi(
       runtime.disposed
         ? { ok: false, provider: '', reason: 'unsupported' }
         : queryStandaloneBalance(store.current().service, store.current().apiKey),
+    testProviderKey: async (input) => {
+      if (runtime.disposed) return { ok: false, message: '服务已关闭' };
+      const info = builtinService(input.service);
+      if (info === undefined) {
+        // 自定义（或未知 id）不在余额名录里：余额接口无从验证。
+        return {
+          ok: false,
+          message:
+            input.service === CUSTOM_SERVICE
+              ? '自定义服务商没有余额接口，无法单独验证密钥；填好后点上面的「测试连接」验证对话。'
+              : '未知服务商：' + String(input.service),
+        };
+      }
+      const draft = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+      const key = draft !== '' ? draft : (store.current().keys?.[info.keyName] ?? '');
+      if (key === '') return { ok: false, message: '还没有密钥：先粘贴这把密钥再测试。' };
+      const result = await queryProviderBalance(info.id, async () => key);
+      if (!result.ok) {
+        const reason = result.reason;
+        const detail = result.message ? '：' + result.message : '';
+        if (reason === 'credential-missing') return { ok: false, message: '密钥为空，没发出去。' };
+        if (reason === 'unsupported') return { ok: false, message: '这家服务商没有可用的余额接口。' };
+        return { ok: false, message: '验证失败' + detail + '（密钥不对、已过期或该服务未开通）' };
+      }
+      return { ok: true, message: describeResult(result) };
+    },
     dispose() {
       runtime.disposed = true;
       runtime.active?.abort();

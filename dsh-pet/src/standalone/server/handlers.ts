@@ -101,6 +101,42 @@ export function testHandler(
 }
 
 /**
+ * 创建「单家服务商密钥测试」处理器（POST）：给设置页多服务商列表的「测试」按钮用。
+ *
+ * 与 /test 的区别：/test 验的是当前表单要保存的那套（协议+地址+模型+密钥）；
+ * 这里只验某一家已存的（或正在输入的）密钥能不能真的换来余额。
+ * @param ai - 设置服务。
+ * @returns 处理请求的异步函数。
+ */
+export function testKeyHandler(
+  ai: StandaloneSettingsService | undefined,
+): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
+  return async (req, res) => {
+    if (req.method !== 'POST') {
+      rejectRequest(res, 405, '仅支持 POST');
+      return;
+    }
+    try {
+      const body = (await readJsonBody(req)) as Record<string, unknown>;
+      const service = typeof body.service === 'string' ? body.service : '';
+      if (service === '') {
+        sendJson(res, 200, { ok: false, message: '请求里缺少服务商 id' });
+        return;
+      }
+      const apiKey = typeof body.apiKey === 'string' ? body.apiKey : undefined;
+      if (ai?.testProviderKey) {
+        const result = await ai.testProviderKey({ service, apiKey });
+        sendJson(res, 200, { ok: result.ok === true, message: String(result.message ?? '') });
+        return;
+      }
+      sendJson(res, 200, { ok: false, message: '当前环境未配置单服务商测试能力' });
+    } catch {
+      sendJson(res, 400, { ok: false, message: '请求格式无效' });
+    }
+  };
+}
+
+/**
  * 创建模型清单处理器（POST）。
  * @param ai - 设置服务。
  * @returns 处理请求的异步函数。

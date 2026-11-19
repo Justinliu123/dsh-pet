@@ -530,3 +530,36 @@ test('testConnection checks parameters and reports success or friendly error', a
     },
   );
 });
+
+
+test('单家密钥测试：只验点名那一家的密钥，不切换当前服务商、也不要求先保存', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'pet-ai-testkey-'));
+  const ai = createStandaloneAi(home, silent, {
+    fetch: (async () => new Response('{}', { status: 404 })) as unknown as typeof fetch,
+  });
+  try {
+    await ai.saveSettings({ service: 'deepseek-official', keys: { DEEPSEEK_API_KEY: 'sk-ds-key' } });
+
+    // 没填草稿、也没存过这把：明确让他先填，绝不空跑一次网络
+    const empty = await ai.testProviderKey({ service: 'opencode-go' });
+    assert.equal(empty.ok, false);
+    assert.match(empty.message, /还没有密钥/);
+
+    // 自定义没有余额接口
+    const custom = await ai.testProviderKey({ service: 'custom', apiKey: 'x' });
+    assert.equal(custom.ok, false);
+    assert.match(custom.message, /没有余额接口/);
+
+    // 未知 id
+    const unknown = await ai.testProviderKey({ service: 'nope', apiKey: 'x' });
+    assert.equal(unknown.ok, false);
+    assert.match(unknown.message, /未知服务商/);
+
+    // 验完这些，当前服务商与它的密钥都没动
+    assert.equal(ai.balanceAuth().provider, 'deepseek-official');
+    assert.equal(ai.balanceAuth().keys.MINIMAX_CN_API_KEY || '', '', '别家的密钥栏保持空');
+  } finally {
+    ai.dispose();
+    rmSync(home, { recursive: true, force: true });
+  }
+});

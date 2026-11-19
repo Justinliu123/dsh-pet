@@ -18,6 +18,7 @@ import {
   modelsHandler,
   settingsHandler,
   testHandler,
+  testKeyHandler,
   type StandaloneServerOptions,
 } from '../standalone/server.ts';
 import { sendIcon } from '../standalone/server/respond.ts';
@@ -56,12 +57,14 @@ export async function startRouter(
   const tester = testHandler(deps.ai);
   const models = modelsHandler(deps.ai);
   const balance = balanceHandler(deps.ai);
+  const testKey = testKeyHandler(deps.ai);
   /** 独立模式自带的 AI 路由：路径即处理器的查表，条目再多也不会把分支嵌套加深。 */
   const aiRoutes: Record<string, typeof settings> = {
     '/standalone-ai/settings': settings,
     '/standalone-ai/test': tester,
     '/standalone-ai/models': models,
     '/standalone-ai/balance': balance,
+    '/standalone-ai/test-key': testKey,
   };
   let boundPort = 0;
 

@@ -50,6 +50,16 @@ function usedPercentFromRemain(remain: unknown): number | undefined {
  * @throws 找不到 model_remains、条目为空或两个窗口都取不到时
  */
 export function parseMinimaxRemains(body: unknown, provider: string): BalanceSuccess {
+  // MiniMax 把「密钥无效」也回成 HTTP 200，只是 base_resp.status_code 非 0：
+  // 不先看这一层，用户会看到「缺少 model_remains」这种答非所问的提示。
+  const resp = obj(obj(body)?.base_resp);
+  const statusCode = looseNum(resp?.status_code);
+  if (statusCode !== undefined && statusCode !== 0) {
+    const detail = String(resp?.status_msg ?? '').trim();
+    throw new Error(
+      'MiniMax 拒绝了这次请求' + (detail !== '' ? '：' + detail : '（status_code ' + String(statusCode) + '）'),
+    );
+  }
   const list = obj(body)?.model_remains;
   if (!Array.isArray(list)) throw new Error('dsh-pet: MiniMax 额度响应缺少 model_remains');
   const entries = list

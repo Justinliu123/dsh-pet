@@ -25,9 +25,10 @@ let savedKeys = [];
 /** 每个服务商各自记住的 profile：协议、地址、模型。 */
 let profilesByService = {};
 
-async function aiRequest(method, body) {
-  const response = await fetch(AI_SETTINGS_URL, {
-    method: method,
+async function postJson(url, body) {
+  const response = await fetch(url, {
+    // 没带 body 就是读，带了就是写：设置页首帧读设置走的是同一个函数。
+    method: body === undefined ? 'GET' : 'POST',
     credentials: 'same-origin',
     cache: 'no-store',
     redirect: 'error',
@@ -42,6 +43,10 @@ async function aiRequest(method, body) {
     throw new Error('设置未保存。请检查接口地址、模型名称与密钥，再重试。');
   }
   return response.json();
+}
+
+async function aiRequest(method, body) {
+  return postJson(AI_SETTINGS_URL, body);
 }
 
 /** 按 id 取服务商条目；未知 id 回落到目录第一项。 */
@@ -143,8 +148,32 @@ function renderKeyList() {
       placeholder: saved ? '要换就粘贴新密钥，留空不动' : '粘贴密钥后点右侧保存',
     });
     const saveBtn = make('button', { class: 'btn', type: 'button', text: '保存' });
+    const testBtn = make('button', { class: 'btn ghost', type: 'button', text: '测试' });
     const delBtn = make('button', { class: 'btn ghost', type: 'button', text: '删除' });
     delBtn.hidden = !saved;
+    const result = make('p', { class: 'keyRowResult', text: '' });
+    testBtn.addEventListener('click', function () {
+      const draft = input.value.trim();
+      const payload = { service: entry.id };
+      // 输入框里有草稿就先验草稿，没有就验已保存的那把——两种都不必先保存。
+      if (draft !== '') payload.apiKey = draft;
+      testBtn.disabled = true;
+      result.className = 'keyRowResult';
+      result.textContent = '正在用这把密钥查余额…';
+      postJson('/standalone-ai/test-key', payload)
+        .then(function (data) {
+          const good = data && data.ok === true;
+          result.className = 'keyRowResult ' + (good ? 'ok' : 'err');
+          result.textContent = String((data && data.message) || (good ? '验证通过。' : '验证失败。'));
+        })
+        .catch(function (error) {
+          result.className = 'keyRowResult err';
+          result.textContent = error && error.message ? error.message : String(error);
+        })
+        .then(function () {
+          testBtn.disabled = false;
+        });
+    });
     saveBtn.addEventListener('click', function () {
       const value = input.value.trim();
       if (value === '') {
@@ -185,10 +214,12 @@ function renderKeyList() {
       });
     });
     const actions = make('div', { class: 'keyRowActions' });
+    actions.appendChild(testBtn);
     actions.appendChild(saveBtn);
     actions.appendChild(delBtn);
     row.appendChild(input);
     row.appendChild(actions);
+    row.appendChild(result);
     host.appendChild(row);
   }
   if (host.childNodes.length === 0) {

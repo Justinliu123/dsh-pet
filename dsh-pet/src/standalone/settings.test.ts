@@ -557,3 +557,12 @@ test('AI 面板：多家服务商的密钥各自保存/删除，不切换当前�
   // 列表必须画在 populateAi 里，否则保存完全家之后新状态不会刷新
   assert.match(script, /renderKeyList\(\);\s*\}/);
 });
+
+
+test('AI 面板：每家密钥都能单独「测试」，结果就地显示', () => {
+  const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
+  assert.match(script, /\/standalone-ai\/test-key/);
+  assert.match(script, /text: '测试'/);
+  assert.match(script, /function postJson\(/);
+  assert.match(script, /keyRowResult/);
+});

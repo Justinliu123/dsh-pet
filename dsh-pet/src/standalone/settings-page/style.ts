@@ -128,6 +128,9 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .keyRowLabel{font-size:13px;color:var(--dsw-alias-label-primary)}
 .keyRowInput{width:100%;height:32px;padding:0 10px;border-radius:var(--dsw-radius-md);border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:13px}
 .keyRowActions{display:flex;gap:8px}
+.keyRowResult{grid-column:1 / -1;margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary)}
+.keyRowResult.ok{color:#3aa76d}
+.keyRowResult.err{color:#e5645f}
 .keyRowActions .btn{height:32px;padding:0 12px}
 .keyActions{display:flex;justify-content:flex-end;margin-top:8px}
 .keyActions .btn{height:26px;padding:0 10px;font-size:12px}

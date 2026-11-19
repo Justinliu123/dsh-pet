@@ -25,6 +25,8 @@ export interface StandaloneSettingsService {
   discoverModels?(input: ModelDiscoveryInput): Promise<ModelDiscoveryResult>;
   /** 可选：按已保存的服务商与密钥查询余额。 */
   queryBalance?(): Promise<unknown>;
+  /** 可选：单独验证某一家服务商的密钥（可传草稿密钥，不切换当前服务商）。 */
+  testProviderKey?(input: { service: string; apiKey?: string }): Promise<{ ok: boolean; message: string }>;
 }
 
 /** 接口地址的校验：只允许干净的 HTTP 或 HTTPS 地址，凭据不放进 URL。 */
