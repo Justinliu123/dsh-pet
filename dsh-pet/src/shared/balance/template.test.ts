@@ -73,6 +73,35 @@ test('渲染：每行一条 label，颜色/字号/对齐进 style，空行转空
   assert.equal(rows[2].text, ' ');
 });
 
+test('随峰谷变色：高峰红、空闲绿，并且优先于模板自带的 color', () => {
+  const peakState: BalanceState = { ...state(), accountTier: 'peak' };
+  const peak = renderBubbleTemplate(
+    [{ text: '{tier} · {peakCountdown}', color: '#32716a', tierColor: true }],
+    peakState,
+    null,
+    bjt(2026, 11, 18, 10, 0),
+  );
+  assert.deepEqual(peak[0].style, { color: '#e0433f' }, '高峰用鲸鱼挂件的红 #e0433f');
+
+  const idleState: BalanceState = { ...state(), accountTier: 'idle' };
+  const idle = renderBubbleTemplate(
+    [{ text: '{tier} · {peakCountdown}', color: '#32716a', tierColor: true }],
+    idleState,
+    null,
+    bjt(2026, 11, 18, 22, 0),
+  );
+  assert.deepEqual(idle[0].style, { color: '#2fa24c' }, '空闲用鲸鱼挂件的绿 #2fa24c');
+
+  const plain = renderBubbleTemplate([{ text: '余额', color: '#32716a' }], peakState, null, bjt(2026, 11, 18, 10, 0));
+  assert.deepEqual(plain[0].style, { color: '#32716a' }, '没开开关就照模板自己的颜色');
+
+  const noTier: BalanceState = { ...state() };
+  delete noTier.accountTier;
+  delete noTier.tier;
+  const fallback = renderBubbleTemplate([{ text: '余额', color: '#32716a', tierColor: true }], noTier, null, bjt(2026, 11, 18, 10, 0));
+  assert.deepEqual(fallback[0].style, { color: '#32716a' }, '拿不到档位时回落到模板颜色');
+});
+
 test('点击编排：custom 步骤只在有模板时出现，页数与内容同源', () => {
   const now = bjt(2026, 11, 18, 10, 0);
   const steps = [{ kind: 'custom' as const }, { kind: 'summary' as const }];

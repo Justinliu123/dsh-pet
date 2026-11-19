@@ -172,6 +172,8 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .bubbleRowEditor:first-of-type{border-top:0}
 .bubbleRowEditor .bubbleBold{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
 .bubbleRowEditor .bubbleBoldBox{margin:0}
+.bubbleRowEditor .bubbleTier{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--dsw-alias-label-tertiary);white-space:nowrap}
+.bubbleRowEditor .bubbleTierBox{margin:0}
 .bubbleStepAdd{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l1)}
 .bubbleStepAddSelect{flex:1 1 auto;min-width:0}
 .bubbleRowEditor .wideInput{flex:1 1 200px;min-width:0}

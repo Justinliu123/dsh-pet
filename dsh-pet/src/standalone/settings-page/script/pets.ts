@@ -88,6 +88,8 @@ function pickBubbleTemplate(source) {
     if (row && typeof row.size === 'number' && Number.isFinite(row.size)) out.size = Math.min(48, Math.max(8, Math.round(row.size)));
     if (row && (row.align === 'left' || row.align === 'center' || row.align === 'right')) out.align = row.align;
     if (row && row.bold === true) out.bold = true;
+    // 随峰谷变色是模板行的一等字段：丢掉它，保存后那一行就退回固定颜色。
+    if (row && row.tierColor === true) out.tierColor = true;
     return out;
   });
 }

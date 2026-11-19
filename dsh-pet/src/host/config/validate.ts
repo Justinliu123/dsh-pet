@@ -191,6 +191,7 @@ export function bubbleRowsValid(value: unknown): boolean {
     if (item.size !== undefined && (typeof item.size !== 'number' || !Number.isFinite(item.size) || item.size < 8 || item.size > 48)) return false;
     if (item.align !== undefined && (typeof item.align !== 'string' || !BUBBLE_ROW_ALIGNS.includes(item.align as 'left' | 'center' | 'right'))) return false;
     if (item.bold !== undefined && typeof item.bold !== 'boolean') return false;
+    if (item.tierColor !== undefined && typeof item.tierColor !== 'boolean') return false;
   }
   return true;
 }

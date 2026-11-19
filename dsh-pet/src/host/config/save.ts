@@ -250,13 +250,14 @@ export function saveUserConfig(
       if (typeof step.title === 'string' && step.title.trim() !== '') row.title = step.title.trim();
       if (Array.isArray(step.template)) {
         row.template = (step.template as Array<Record<string, unknown>>).map((item) => {
-          const clean: { text: string; color?: string; size?: number; align?: string; bold?: boolean } = {
+          const clean: { text: string; color?: string; size?: number; align?: string; bold?: boolean; tierColor?: boolean } = {
             text: String(item.text),
           };
           if (typeof item.color === 'string') clean.color = item.color.toLowerCase();
           if (typeof item.size === 'number') clean.size = Math.round(item.size);
           if (typeof item.align === 'string') clean.align = item.align;
           if (typeof item.bold === 'boolean') clean.bold = item.bold;
+          if (typeof item.tierColor === 'boolean') clean.tierColor = item.tierColor;
           return clean;
         });
       }
@@ -265,11 +266,14 @@ export function saveUserConfig(
   }
   if (btp !== undefined) {
     outConfig.bubbleTemplate = (btp as Array<Record<string, unknown>>).map((item) => {
-      const clean: { text: string; color?: string; size?: number; align?: string; bold?: boolean } = { text: String(item.text) };
+      const clean: { text: string; color?: string; size?: number; align?: string; bold?: boolean; tierColor?: boolean } = {
+        text: String(item.text),
+      };
       if (typeof item.color === 'string') clean.color = item.color.toLowerCase();
       if (typeof item.size === 'number') clean.size = Math.round(item.size);
       if (typeof item.align === 'string') clean.align = item.align;
       if (typeof item.bold === 'boolean') clean.bold = item.bold;
+      if (typeof item.tierColor === 'boolean') clean.tierColor = item.tierColor;
       return clean;
     });
   }

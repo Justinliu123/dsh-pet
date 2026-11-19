@@ -287,16 +287,42 @@
     { "kind": "detail" },
     { "kind": "pricing" }
   ],
-  // bubbleTemplate（「气泡」分区 → 点击编排 → 自定义页）：每行一条，文本里的 {占位符} 在气泡里
-  // 替换成实时数据（余额/额度/峰谷价目/碎碎念/时间等，占位符表见设置页的下拉提示）。
-  // color 只接受 #rgb / #rrggbb；size 为字号 px（8~48，渲染时随气泡基准缩放）；align 为 left/center/right；
-  // 最多 6 行。把点击队列里加一条 { "kind": "custom" } 才会显示这一页。
-  "bubbleTemplate": [
-    { "text": "余额 {balance}", "color": "#e6e8ee", "size": 15, "align": "center" },
-    { "text": "今日已用 {todaySpend} · 周额度剩 {weekly}", "color": "#9aa0aa", "size": 10, "align": "center" },
-    { "text": "{peakStatus} · {peakCountdown}", "color": "#9aa0aa", "size": 10, "align": "center" }
+  // 点击编排的默认三页：余额卡片 / MiniMax 额度卡片 / 峰谷价目。每页自带 template，
+  // 所以「预置页」也等于可编辑页——设置页里改这些行就是改默认外观。
+  "bubbleClickSteps": [
+    {
+      "kind": "custom",
+      "title": "DeepSeek 余额",
+      "template": [
+        { "text": "DeepSeek 余额", "color": "#203170", "size": 18, "align": "center", "bold": true },
+        { "text": " {balance}", "color": "#4e6ab9", "size": 26, "align": "center", "bold": true },
+        { "text": "今日已用 {todaySpend}", "color": "#203170", "size": 12, "align": "center" },
+        { "text": "{tier} · {peakCountdown}", "color": "#32716a", "size": 11, "align": "center", "tierColor": true }
+      ]
+    },
+    {
+      "kind": "custom",
+      "id": "c1",
+      "title": "MiniMax Plan 余额",
+      "template": [
+        { "text": "MiniMax Plan 余额", "color": "#e4197f", "size": 15, "align": "center", "bold": true },
+        { "text": "5h 剩余 {rolling} · {rollingReset}", "color": "#e44996", "size": 14, "align": "center", "bold": true },
+        { "text": "周剩余 {weekly} · {weeklyReset}", "color": "#e25584", "size": 14, "align": "center", "bold": true }
+      ]
+    },
+    {
+      "kind": "pricing",
+      "template": [
+        { "text": "{peakStatus} · {peakCountdown}", "size": 12, "align": "left", "bold": true, "tierColor": true },
+        { "text": "Flash {flashHit} / {flashMiss} / {flashOut}", "size": 11, "align": "left", "bold": true },
+        { "text": "Pro {proHit} / {proMiss} / {proOut}", "size": 11, "align": "left", "bold": true }
+      ]
+    }
   ],
-  // ===================== 默认宠物列表（多开） =====================
+  // bubbleTemplate（旧的全局自定义页模板）：仅当队列里有一条 { "kind": "custom" } 且它自己没有 template 时兜底。
+  // 默认留空——上面的三页已经各自带了内容，把旧模板清掉。
+  "bubbleTemplate": [],
+// ===================== 默认宠物列表（多开） =====================
   // pets 数组定义默认宠物；「设置页 → 添加宠物」的默认模板取 pets[0]（main）。
   // 每个宠物独立：name（显示名，可重复：悬浮提示 / AI 人设追加「你的名字是X」/ 未来命令行定位的
   //   显示层。可省略——缺失或留空按该宠物 id 处理并告警，兼容旧配置）、

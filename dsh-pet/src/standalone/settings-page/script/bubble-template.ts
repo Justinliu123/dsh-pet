@@ -141,8 +141,28 @@ function bubblePreviewTierColor(tier) {
 }
 
 /** 给一行预览套上模板里的颜色/字号/对齐/加粗。 */
+/** 峰谷行色：与桌宠气泡渲染同一套色值（高峰红 #e0433f、空闲绿 #2fa24c）。 */
+var BUBBLE_PEAK_COLOR = '#e0433f';
+var BUBBLE_IDLE_COLOR = '#2fa24c';
+
+/**
+ * 行内开关「随峰谷变色」时该用哪个颜色。
+ *
+ * @param row - 这一行的模板
+ * @returns 峰/谷颜色；没开或拿不到档位时返回 null
+ */
+function bubbleTierPreviewColor(row) {
+  if (!row || row.tierColor !== true) return null;
+  var tier = BUBBLE_LIVE_CONTEXT && BUBBLE_LIVE_CONTEXT.tier;
+  if (tier === '峰') return BUBBLE_PEAK_COLOR;
+  if (tier === '谷') return BUBBLE_IDLE_COLOR;
+  return BUBBLE_PEAK_COLOR;
+}
+
 function styleBubblePreviewLine(line, row) {
-  if (row.color) line.style.color = row.color;
+  var tierColor = bubbleTierPreviewColor(row);
+  if (tierColor) line.style.color = tierColor;
+  else if (row.color) line.style.color = row.color;
   if (typeof row.size === 'number') line.style.fontSize = row.size + 'px';
   if (row.align) line.style.textAlign = row.align;
   if (row.bold === true) line.style.fontWeight = '700';
@@ -350,6 +370,12 @@ function bubbleStepRowEditor(index, row, rowIndex, total) {
   });
   var bold = make('label', { class: 'bubbleBold', title: '加粗' }, [boldBox, make('span', { text: '粗体' })]);
 
+  var tierBox = make('input', { type: 'checkbox', class: 'bubbleTierBox', checked: row.tierColor === true, title: '随峰谷变色：高峰红、空闲绿' });
+  tierBox.addEventListener('change', function () {
+    setBubbleStepRow(index, rowIndex, { tierColor: tierBox.checked });
+  });
+  var tier = make('label', { class: 'bubbleTier', title: '随峰谷变色：高峰红、空闲绿' }, [tierBox, make('span', { text: '峰红谷绿' })]);
+
   var color = make('input', { type: 'color', value: row.color || DEFAULT_ROW_COLOR, title: '文字颜色' });
   color.addEventListener('input', function () {
     setBubbleStepRow(index, rowIndex, { color: color.value });
@@ -391,7 +417,7 @@ function bubbleStepRowEditor(index, row, rowIndex, total) {
     removeBubbleStepRow(index, rowIndex);
   });
 
-  return make('div', { class: 'bubbleRowEditor' }, [text, insert, bold, color, size, align, up, down, remove]);
+  return make('div', { class: 'bubbleRowEditor' }, [text, insert, bold, tier, color, size, align, up, down, remove]);
 }
 
 /** 某一步的编辑面板：预览 + 占位符说明 + 逐行编辑 + 加一行。 */

@@ -99,9 +99,31 @@ export function fillBubbleTemplate(text: string, context: BubbleTemplateContext)
   });
 }
 
-function styleOf(row: BubbleRowTemplate): BubbleRowStyle | undefined {
+/** 高峰文字色：与鲸鱼挂件的峰谷模块一致（#e0433f / #2fa24c）。 */
+export const PEAK_TIER_COLOR = '#e0433f';
+
+/** 空闲文字色。 */
+export const IDLE_TIER_COLOR = '#2fa24c';
+
+/**
+ * 当前时段的颜色（峰红/谷绿）；拿不到档位时返回 undefined，交给模板自己的 color。
+ * @param state - 余额状态（取 accountTier ?? tier）。
+ * @returns 峰/谷对应的颜色串。
+ */
+export function tierRowColor(state: BalanceState | undefined): string | undefined {
+  if (state === undefined || !state.ok) return undefined;
+  const tier = state.accountTier ?? state.tier;
+  if (tier === 'peak') return PEAK_TIER_COLOR;
+  if (tier === 'idle') return IDLE_TIER_COLOR;
+  return undefined;
+}
+
+function styleOf(row: BubbleRowTemplate, state?: BalanceState): BubbleRowStyle | undefined {
   const style: BubbleRowStyle = {};
-  if (row.color !== undefined && row.color !== '') style.color = row.color;
+  // tierColor 优先：这一行表达「现在贵还是便宜」，颜色必须跟着时段走。
+  const tierColor = row.tierColor === true ? tierRowColor(state) : undefined;
+  if (tierColor !== undefined) style.color = tierColor;
+  else if (row.color !== undefined && row.color !== '') style.color = row.color;
   if (row.size !== undefined) style.size = row.size;
   if (row.align !== undefined && row.align !== 'left') style.align = row.align;
   if (row.bold === true) style.bold = true;
@@ -120,7 +142,7 @@ export function renderBubbleTemplate(
   return template.map((row) => {
     const filled = fillBubbleTemplate(row.text, context);
     const text = filled === '' ? ' ' : filled;
-    const style = styleOf(row);
+    const style = styleOf(row, state);
     return style === undefined ? { role: 'label', text } : { role: 'label', text, style };
   });
 }
@@ -168,7 +190,7 @@ export function bubbleStepSeedTemplate(kind: BubblePageKind): BubbleRowTemplate[
       ];
     case 'pricing':
       return [
-        { text: '{peakStatus} · {peakCountdown}', size: 12, align: 'left' },
+        { text: '{peakStatus} · {peakCountdown}', size: 12, align: 'left', tierColor: true },
         { text: 'Flash {flashHit} / {flashMiss} / {flashOut}', size: 11, align: 'left' },
         { text: 'Pro {proHit} / {proMiss} / {proOut}', size: 11, align: 'left' },
       ];

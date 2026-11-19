@@ -265,6 +265,11 @@ export interface BubbleRowTemplate {
   readonly size?: number;
   readonly align?: 'left' | 'center' | 'right';
   readonly bold?: boolean;
+  /**
+   * 按峰谷时段自动上色：高峰时红、空闲时绿（取景自鲸鱼挂件的峰谷模块配色）。
+   * 开着就忽略 color —— 这一行本来就是「现在贵还是便宜」的提示。
+   */
+  readonly tierColor?: boolean;
 }
 
 /** 不可用状态是否弹文字说明的判定结果 */
