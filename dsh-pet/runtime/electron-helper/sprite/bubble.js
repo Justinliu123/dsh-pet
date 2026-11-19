@@ -169,10 +169,13 @@ Object.assign(PetSprite.prototype, {
         : this.balanceView;
       const hasTier = rows.some((r) => r.role === 'tier');
       if (hasTier) {
-        // deepseek 余额单行：余额（峰/谷）¥x — 档位字着色
+        // deepseek 余额单行：余额（峰/谷）¥x — 档位字着色。
+        // 这一行左对齐、片段间不留缝（不能用 space-between，否则「余额（」「谷」「）¥x」被摊开）；
+        // 今日已用那类副行另起一行，不要塞进档位行里。
         const line = document.createElement('div');
-        line.className = 'pet-bub-row';
+        line.className = 'pet-bub-row pet-bub-tierline';
         for (const r of rows) {
+          if (r.role !== 'tier' && r.role !== 'label') continue;
           const span = document.createElement('span');
           if (r.role === 'tier') span.className = 'pet-bub-tier pet-bub-tier-' + r.tier;
           applyRowStyle(span, r);
@@ -180,6 +183,14 @@ Object.assign(PetSprite.prototype, {
           line.appendChild(span);
         }
         this.bubble.appendChild(line);
+        for (const r of rows) {
+          if (r.role !== 'sub' && r.role !== 'error') continue;
+          const extra = document.createElement('div');
+          extra.className = 'pet-bub-row ' + (r.role === 'error' ? 'pet-bub-err' : 'pet-bub-sub');
+          applyRowStyle(extra, r);
+          extra.textContent = r.text;
+          this.bubble.appendChild(extra);
+        }
       } else {
         for (const r of rows) {
           // 展开态一行 = 一个窗口：窗口名 + 进度条 + 已用百分比 + 重置倒计时，四段 flex 同行，条吃剩余宽度。

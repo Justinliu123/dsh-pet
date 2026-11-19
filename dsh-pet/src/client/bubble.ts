@@ -70,6 +70,8 @@ const bubbleCss = [
   '.dsh-pet-bubble .pet-bub-row{display:flex;justify-content:space-between;gap:calc(var(--f)*0.6593);flex-wrap:wrap}',
   // 档位行由多个片段拼成：只在片段之间换行，片段内部不拆字，避免竖排。
   '.dsh-pet-bubble .pet-bub-row>span{white-space:nowrap}',
+  // 档位行左对齐：片段是拼起来的一句话，不能按 space-between 摊开。
+  '.dsh-pet-bubble .pet-bub-tierline{justify-content:flex-start;gap:0}',
   '.dsh-pet-bubble .pet-bub-sub{font-size:calc(var(--f)*0.7692);color:rgba(43,43,43,.6)}',
   '.dsh-pet-bubble .pet-bub-val{font-variant-numeric:tabular-nums;font-weight:650;color:#1f1f1f}',
   '.dsh-pet-bubble .pet-bub-err{color:#d94f3d;font-size:calc(var(--f)*0.7692)}',
@@ -155,23 +157,35 @@ function rowStyle(r: BalanceBubbleRow): Record<string, string> | undefined {
 }
 
 function rowsToNodes(h: typeof jsx, rows: BalanceBubbleRow[]): ReactNode {
-  // 含档位段时同一行内联渲染，峰/谷着色。
+  // 含档位段时同一行内联渲染，峰/谷着色。这一行不能用 space-between——「余额（」「谷」「）¥x」
+  // 三个片段被均匀摊开，看起来像三个不相干的东西；档位行左对齐、片段之间不留缝。
   if (rows.some((r) => r.role === 'tier')) {
-    return h('div', {
-      className: 'pet-bub-row',
-      children: rows.map((r, i) => {
-        // 进度条行不会与档位段同现。
-        if (r.role === 'quota') return null;
-        if (r.role === 'tier') {
-          return h('span', {
-            key: i,
-            className: 'pet-bub-tier pet-bub-tier-' + r.tier,
-            children: r.text,
-          });
-        }
-        return h('span', { key: i, style: rowStyle(r), children: r.text });
+    const inline = rows.filter((r) => r.role === 'tier' || r.role === 'label');
+    const below = rows.filter((r) => r.role === 'sub' || r.role === 'error');
+    return [
+      h('div', {
+        key: 'tierline',
+        className: 'pet-bub-row pet-bub-tierline',
+        children: inline.map((r, i) => {
+          if (r.role === 'tier') {
+            return h('span', {
+              key: i,
+              className: 'pet-bub-tier pet-bub-tier-' + r.tier,
+              children: r.text,
+            });
+          }
+          return h('span', { key: i, style: rowStyle(r), children: r.text });
+        }),
       }),
-    });
+      ...below.map((r, i) =>
+        h('div', {
+          key: 'below' + i,
+          className: 'pet-bub-row ' + (r.role === 'error' ? 'pet-bub-err' : 'pet-bub-sub'),
+          style: rowStyle(r),
+          children: r.text,
+        }),
+      ),
+    ];
   }
   // 其余每行一个块：label、sub、error、quota。
   return rows.map((r, i) => {

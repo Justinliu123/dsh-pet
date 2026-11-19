@@ -186,6 +186,11 @@
       .pet-bub-row > span {
         white-space: nowrap;
       }
+      /* 档位行（余额（峰/谷）¥x）左对齐：片段是拼起来的一句话，按 space-between 摊开就散了 */
+      .pet-bub-row.pet-bub-tierline {
+        justify-content: flex-start;
+        gap: 0;
+      }
       .pet-bub-sub {
         font-size: calc(var(--f) * 0.7692);
         color: rgba(43, 43, 43, 0.6);
