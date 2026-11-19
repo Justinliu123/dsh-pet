@@ -1,13 +1,15 @@
 /**
- * DSH 桥（独立桌宠侧）：DSH 宿主在跑时，把它的余额 / 工作状态 / 通知 / 宠物说话镜像进本地快照。
+ * DSH 桥（独立桌宠侧）：DSH 宿主在跑时，把它的会话工作状态与通知镜像进本地快照。
+ *
+ * 边界（单一写者）：余额、账本、配置全归 exe 自己——DSH 侧是纯数据源，不再提供 balance 段，
+ * 也不再读写 exe 的数据目录。桥只镜像会话类事实：`workStatus`（正在思考/工作/等待）、`notify`（回合结果）。
  *
  * 为什么是「读描述文件 + 拉 /state」而不是直连固定端口：DSH 的 Web 端口每次启动随机（port=0），
- * 扫端口不可靠；DSH 侧宿主把入口写进 ~/.dsh/dsh-pet/standalone-bridge.json，本端每秒读一次即可。
+ * 扫端口不可靠；DSH 侧插件把入口写进 %APPDATA%/dsh-pet/bridge/standalone-bridge.json，本端每秒读一次即可。
  * 桥只做镜像，不反向写 DSH：独立应用是数据消费者，反向写入会和 DSH 里的设置页打架。
- * DSH 不在时桥静默断开（不报错、不弹窗），独立功能照常；余额/通知这类历史事实保持断链前的样子，
+ * DSH 不在时桥静默断开（不报错、不弹窗），独立功能照常；通知这类历史事实保持断链前的样子，
  * 只有工作状态会被重置为空闲——它描述的是「现在在做什么」，留着会永远显示「思考中」。
- * 去重规则：指令类（说/演）只在远端 counter 变化时写；事实类除 counter 变化外，本地内容与远端不同也重写，
- * 否则本地自己的余额轮询会用 unsupported 覆盖掉 DSH 给的余额。
+ * 去重规则：指令类（说/演）只在远端 counter 变化时写；事实类除 counter 变化外，本地内容与远端不同也重写。
  * 始终成立：读本地状态与写本地状态都只经宿主半侧的 PollStateStore，不绕过 counter。
  *
  * @module dsh-pet/src/standalone/dsh-bridge
@@ -19,12 +21,12 @@ import { ROUTE_SEGMENT } from '../shared/constants.ts';
 
 /** 会被镜像的全局段：config/menu/focusSession 不镜像——前两者是 DSH 侧 UI 的形态，
  *  focusSession 是「跳到哪个会话」的一次性指令，独立应用没有 DSH 会话可跳。 */
-export type MirroredSectionName = 'balance' | 'workStatus' | 'notify' | 'env';
+export type MirroredSectionName = 'workStatus' | 'notify';
 
 /** 会被镜像的每宠物叶子：说与演是指令，position/throw 是物理状态、位置只有本机窗口知道。 */
 export type MirroredPetLeafName = 'say' | 'anim';
 
-export const MIRRORED_SECTIONS: readonly MirroredSectionName[] = ['balance', 'workStatus', 'notify', 'env'];
+export const MIRRORED_SECTIONS: readonly MirroredSectionName[] = ['workStatus', 'notify'];
 export const MIRRORED_PET_LEAVES: readonly MirroredPetLeafName[] = ['say', 'anim'];
 
 /** 轮询间隔：与 DSH 页面一致按 1s；/state 是本机回环，开销可忽略。 */
@@ -224,7 +226,7 @@ export function createDshBridge(options: DshBridgeOptions): DshBridge {
     if (!connected) {
       connected = true;
       options.log(
-        `[dsh-pet] DSH 桥已连接：${origin}（余额/会话工作状态/通知/说话来自 DSH，独立功能照常）`,
+        `[dsh-pet] DSH 桥已连接：${origin}（会话工作状态/通知/说话来自 DSH；余额与账本由本机负责）`,
       );
     }
   };

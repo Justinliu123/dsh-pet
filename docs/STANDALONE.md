@@ -23,6 +23,8 @@
 >
 > 开发注意：`node scripts/dist.mjs` 会清空 `win-unpacked`，**重新打包前先备份 `win-unpacked\data\`**，
 > 打完再放回去（或者用 `DSH_PET_OUTPUT_DIR` 换一个输出目录再合并）。
+> 用 `cp -r` 手工搬回去的文件会继承安装目录的宽 ACL，密钥文件同样会被拒绝加载，
+> 需要再收紧一次：`icacls <文件> /inheritance:r /remove:g *S-1-5-11 *S-1-5-32-545 /grant:r <用户名>:F`。
 
 ## 两种形态
 
@@ -31,8 +33,9 @@
    `%APPDATA%\dsh-pet\bridge\standalone-bridge.json`；独立桌宠每秒读一次并连上。描述文件没有时（例如 DSH 侧还是旧插件、
    或插件刚重启还没写文件），独立桌宠会去读 DSH 自己的日志（`<DSH 数据根>\logs\desktop-next*.log` 尾部的
    `dsh web: http://127.0.0.1:<port>/?token=…`）兜底发现入口，所以**多数情况下不用重启 DSH 也能连上**。连上后：
-   - 会话工作状态（thinking / working / waiting / result）、通知、语音、说话都来自 DSH；
-   - 余额与额度以 DSH 侧为准（MiniMax 5h/周额度 + DeepSeek 账户余额 + 今日已用）；
+   - 会话工作状态（thinking / working / waiting / result）与回合通知来自 DSH；
+   - **余额与账本永远归 exe**：DSH 侧不查余额、不记账、不碰 exe 的 `data\`，所以只轮询一次、只算一份
+     「今日已用」（MiniMax 额度与 DeepSeek 余额都按 exe 自己的 AI 设置取）；
    - 插件**不再**在 DSH 页面里画宠物、**不再**拉起桌面 Helper 窗口、**不再**自动生成碎碎念——那些都由 exe 负责，
      所以不会出现两只宠物或者同一句话念两遍。
 
@@ -129,6 +132,17 @@
 - 粘贴时带的 `Bearer ` 前缀和首尾引号会自动剥掉，不会因为空白被拒；
 - 密钥里混入零宽字符/换行会被拒绝并提示重新复制（这种字符肉眼看不见，是 401 的常见原因）。
 
+## 代码分两个仓库
+
+| 仓库 | 目录 | 内容 | 部署 |
+| --- | --- | --- | --- |
+| 主仓（本仓） | `E:\projects\dsh-pet` | 桌面 exe 全部：界面、桌面 Helper、配置、余额/账本、设置页、桥客户端 | `npm run build` → `node scripts/dist.mjs` 出 exe |
+| 插件仓 | `E:\projects\dsh-pet-bridge` | 只有数据通道：会话工作状态/通知段、`GET /dsh-pet-7340/state`、入口公布 | 拷进 `<DSH 数据根>\profiles\desktop\node_modules\dsh-pet` |
+
+单一写者：配置、账本、余额、碎碎念归 exe；插件只读会话事件、只写自己的描述文件。两边不共享配置文件，
+也不共享代码——插件仓是纯 ESM 单文件（`lib/index.js`，无构建、无运行时依赖），主仓升级不会牵连它，
+插件升级也不需要重装桌宠。
+
 ## 启用 DSH 侧插件要重启一次 DSH
 
 插件包目录被本地构建产物替换过，plugin_manager 判定为 `package-moved`，热加载不可用：
@@ -148,7 +162,7 @@
 
 ## 已知限制
 
-- 断链后余额会保留最后一次镜像值，直到本地轮询覆盖（约 30 分钟）；
+- DSH 不开时桌宠只有本地数据（余额要自己在「打开 AI 设置」里配服务商）；
 - 独立模式下没有 DSH 账号态，DeepSeek 余额需要在「打开 AI 设置」里配（当前默认 provider=custom → `unsupported`）；
 - 打包产物未签名，SmartScreen 可能提示；但**启动已经很快**：18:19 实测从双击到桥连上约 1.5 秒（旧的 20 秒卡顿来自 DPI 探测子进程死锁，已修）；
 - DPI 补偿只在探测成功后启用；探测失败按不补偿继续（主屏 scaleFactor=1 时观感无差异）。

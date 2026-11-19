@@ -91,6 +91,21 @@ test('占位符目录覆盖价格与时间，供设置页下拉使用', () => {
   }
 });
 
+test('纯 money 形态：{balance} 与 {tier} 回落到 wallets/tier，不显示 --', () => {
+  const state = {
+    ok: true,
+    provider: 'deepseek-official',
+    shape: 'money',
+    wallets: [{ currency: 'CNY', total: '94.93' }],
+    tier: 'idle',
+    todaySpend: 5.94,
+  };
+  const ctx = bubbleTemplateContext(state, null, Date.parse('2026-11-19T12:00:00Z'));
+  assert.equal(ctx.balance, '¥94.93');
+  assert.equal(ctx.tier, '谷');
+  assert.equal(ctx.todaySpend, '¥5.94');
+});
+
 test('预置页的编辑种子：每一页都有可用的占位符模板', () => {
   const summary = bubbleStepSeedTemplate('summary');
   assert.ok(summary.length > 0);

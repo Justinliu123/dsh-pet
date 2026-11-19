@@ -80,44 +80,33 @@ const remoteState: RemoteStateSnapshot = {
 test('planMirror：首次把所有镜像段与指令叶子写进来', () => {
   const { writes, seen } = planMirror({ remote: remoteState, seen: createMirrorSeen(), localSections: {} });
   const kinds = writes.map((write) => (write.kind === 'section' ? `s:${write.name}` : `p:${write.petId}:${write.leaf}`));
-  assert.deepEqual(kinds, [
-    's:balance',
-    's:workStatus',
-    's:notify',
-    's:env',
-    'p:default:say',
-    'p:default:anim',
-  ]);
-  assert.equal(seen.sections.balance, 7);
+  assert.deepEqual(kinds, ['s:workStatus', 's:notify', 'p:default:say', 'p:default:anim']);
+  assert.equal(seen.sections.workStatus, 8);
   assert.equal(seen.pets['default\u0000say'], 11);
 });
 
 test('planMirror：counter 未变且本地一致 → 不重复写', () => {
   const first = planMirror({ remote: remoteState, seen: createMirrorSeen(), localSections: {} });
   const localSections = {
-    balance: remoteState.sections?.balance?.data,
     workStatus: remoteState.sections?.workStatus?.data,
     notify: remoteState.sections?.notify?.data,
-    env: remoteState.sections?.env?.data,
   };
   const second = planMirror({ remote: remoteState, seen: first.seen, localSections });
   assert.deepEqual(second.writes, []);
 });
 
-test('planMirror：counter 未变但本地被别的写入覆盖 → 事实类重写纠正（独立应用自己的余额轮询）', () => {
+test('planMirror：counter 未变但本地被别的写入覆盖 → 事实类重写纠正', () => {
   const first = planMirror({ remote: remoteState, seen: createMirrorSeen(), localSections: {} });
   const localSections = {
-    balance: { ok: false, reason: 'unsupported' }, // 本地 custom 服务商轮询写进来的
     workStatus: remoteState.sections?.workStatus?.data,
-    notify: remoteState.sections?.notify?.data,
-    env: remoteState.sections?.env?.data,
+    notify: { kind: 'local-write' }, // 本地别处写进来的
   };
   const second = planMirror({ remote: remoteState, seen: first.seen, localSections });
   assert.equal(second.writes.length, 1);
   assert.deepEqual(second.writes[0], {
     kind: 'section',
-    name: 'balance',
-    data: remoteState.sections?.balance?.data,
+    name: 'notify',
+    data: remoteState.sections?.notify?.data,
   });
 });
 
@@ -177,7 +166,7 @@ test('桥集成：读描述文件拉 /state 写进本地仓；断链后工作状
     });
     try {
       bridge.start();
-      await waitFor(() => store.snapshot.sections.balance !== undefined);
+      await waitFor(() => store.snapshot.sections.workStatus !== undefined);
       assert.deepEqual(store.snapshot.sections.workStatus?.data, remoteState.sections?.workStatus?.data);
       assert.deepEqual(store.snapshot.pets.default?.say?.data, { text: '干完了' });
       // 不镜像的段与叶子一个都不能出现
@@ -228,7 +217,7 @@ test('桥集成：没有描述文件时从 DSH 日志兜底发现入口', async 
       bridge.start();
       await waitFor(() => bridge.status().connected === true);
       assert.equal(fetches[0], 'http://127.0.0.1:55555/dsh-pet-7340/state');
-      assert.deepEqual(store.snapshot.sections.balance?.data, remoteState.sections?.balance?.data);
+      assert.deepEqual(store.snapshot.sections.workStatus?.data, remoteState.sections?.workStatus?.data);
       assert.ok(logs.some((line) => line.includes('DSH 桥已连接：http://127.0.0.1:55555')));
     } finally {
       bridge.stop();

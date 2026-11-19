@@ -63,14 +63,15 @@ export function bubbleTemplateContext(
   now = Date.now(),
 ): BubbleTemplateContext {
   const windows = state !== undefined && state.ok && state.shape === 'windows' ? state : undefined;
-  const account = state !== undefined && state.ok ? state.accountWallets?.[0] : undefined;
+  const account = state !== undefined && state.ok ? (state.accountWallets?.[0] ?? state.wallets?.[0]) : undefined;
+  const tier = state !== undefined && state.ok ? (state.accountTier ?? state.tier) : undefined;
   const peak = isPeakAt(now);
   const next = nextSwitchAt(now);
   const date = new Date(now + BEIJING_OFFSET_MS);
   const iso = date.toISOString();
   return {
     balance: account === undefined ? '--' : moneyText(account.total),
-    tier: state !== undefined && state.ok && state.accountTier === 'peak' ? '峰' : state !== undefined && state.ok && state.accountTier === 'idle' ? '谷' : '',
+    tier: tier === 'peak' ? '峰' : tier === 'idle' ? '谷' : '',
     todaySpend: state !== undefined && state.ok && state.todaySpend !== undefined ? moneyText(state.todaySpend.toFixed(2)) : '--',
     rolling: percentText(windows?.rolling),
     rollingReset: countdown(windows?.rollingResetsAt, now),
