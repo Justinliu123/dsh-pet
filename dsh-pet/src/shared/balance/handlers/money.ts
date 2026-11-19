@@ -53,8 +53,39 @@ function moneyRows(v: BalanceView): BalanceBubbleRow[] {
   return rows;
 }
 
+/**
+ * money 形态的展开页：按币种把钱包拆开，给出已用/满额与充值、赠送。
+ *
+ * 收起态只报一个合计金额，看不出「还剩多少额度」；这里补上满额与拆分，让「窗口明细」那一页在
+ * 纯账户余额（DeepSeek 官方 key）场景下也有可读内容，而不是和收起态一模一样。
+ */
+function moneyDetailRows(v: BalanceView): BalanceBubbleRow[] {
+  const wallets = (v.wallets ?? []).filter(
+    (w) => Number(w.total) !== 0 || Number(w.fullBalance ?? 0) > 0,
+  );
+  if (wallets.length === 0) return moneyRows(v);
+  const rows: BalanceBubbleRow[] = [];
+  for (const w of wallets) {
+    const symbol = w.currency === 'USD' ? '$' : '¥';
+    rows.push({ role: 'label', text: w.currency + ' ' + symbol + w.total });
+    // 满额只在「确实还没花到上限之外」时有意义：账户里有充值余额时 fullBalance 只是赠送额度，摆出来反而误导。
+    if (w.fullBalance !== undefined && Number(w.fullBalance) >= Number(w.total)) {
+      rows.push({ role: 'sub', text: '满额 ' + symbol + w.fullBalance });
+    }
+    const parts: string[] = [];
+    if (Number(w.toppedUp) !== 0) parts.push('充值 ' + symbol + w.toppedUp);
+    if (Number(w.granted) !== 0) parts.push('赠送 ' + symbol + w.granted);
+    if (parts.length > 0) rows.push({ role: 'sub', text: parts.join(' · ') });
+  }
+  if (v.todaySpend !== undefined) {
+    rows.push({ role: 'sub', text: '今日已用 ¥' + v.todaySpend.toFixed(2) });
+  }
+  return rows;
+}
+
 /** money 形态的展示规则：百分比按币种基准折算，收成一行业务气泡。 */
 export const moneyHandler: ShapeHandler = {
   percent: moneyPercent,
   rows: moneyRows,
+  detail: moneyDetailRows,
 };

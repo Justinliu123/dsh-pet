@@ -75,6 +75,9 @@ export function balanceDetailView(state: BalanceState): BalanceBubbleRow[] {
   return handler.detail ? handler.detail(state) : handler.rows(state);
 }
 
+/** 峰谷定价只属于 DeepSeek：账号态与官方 key 都算。 */
+const DEEPSEEK_PROVIDER_IDS: ReadonlySet<string> = new Set(['deepseek-account', 'deepseek-official']);
+
 /**
  * 余额气泡是否带峰谷价目页。
  *
@@ -82,8 +85,10 @@ export function balanceDetailView(state: BalanceState): BalanceBubbleRow[] {
  * （峰谷定价只属于它），纯窗口视图（MiniMax、OpenCode Go 等）不该看到 DeepSeek 的价目。
  */
 export function pricingPageAvailable(state: BalanceState): boolean {
-  if (!state.ok || state.shape !== 'windows') return false;
-  return (state.accountWallets?.length ?? 0) > 0;
+  if (!state.ok) return false;
+  if (state.shape === 'windows') return (state.accountWallets?.length ?? 0) > 0;
+  // 只有账户金额（DeepSeek 官方 key）时也有峰谷：价目属于服务商，不是属于窗口形态。
+  return state.shape === 'money' && DEEPSEEK_PROVIDER_IDS.has(state.provider);
 }
 
 /** 点击编排里可关掉的页（设置页「气泡」分区写的就是它）。
@@ -162,15 +167,19 @@ function bubbleStepRows(
  */
 export function resolveBubblePages(
   state: BalanceState,
-  steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
+  steps: readonly BubbleClickStep[] | undefined,
   options: BubblePageOptions = {},
   whisperText?: string | null,
   template?: readonly BubbleRowTemplate[],
 ): ResolvedBubblePage[] {
   const seen = new Set<string>();
   const pages: ResolvedBubblePage[] = [];
-  for (let index = 0; index < steps.length; index += 1) {
-    const step = steps[index];
+  // 传了队列（配置里存的 bubbleClickSteps）就按队列走，旧开关不参与；没传才用默认口径+两个旧开关。
+  // 「没给队列」或「给的就是缺省队列」都算默认口径：这时旧的 detail/pricing 开关仍然生效。
+  const legacyGates = steps === undefined || steps === DEFAULT_BUBBLE_CLICK_STEPS;
+  const queue = steps ?? DEFAULT_BUBBLE_CLICK_STEPS;
+  for (let index = 0; index < queue.length; index += 1) {
+    const step = queue[index];
     if (step === null || typeof step !== 'object') continue;
     if (step.enabled === false) continue;
     const kind = step.kind;
@@ -182,9 +191,20 @@ export function resolveBubblePages(
     // 自定义页没有内容就不显示（没配就等于没这一步）。
     if (kind === 'custom' && (rows === undefined || rows.length === 0)) continue;
     // 明细/用量只有窗口形态有；money/points 这类内置单页形态点了也只该有一页。
-    if (kind === 'detail' && (!state.ok || state.shape !== 'windows')) continue;
-    if (kind === 'detail' && options.detail === false) continue;
-    if (kind === 'pricing' && options.pricing === false) continue;
+    // 明细页：窗口形态给区间明细，账户金额形态给钱包拆分（handler 的 detail 回落）。
+    // custom/points 没有可展开的读数，仍只有一页。
+    if (kind === 'detail' && (!state.ok || state.shape === 'custom' || state.shape === 'points')) continue;
+    // 账户金额形态要真有钱包数据才值得多一页（否则明细与收起态一模一样，白翻一次）。
+    if (kind === 'detail' && state.ok && state.shape === 'money') {
+      const wallets = 'wallets' in state ? state.wallets : undefined;
+      if ((wallets?.length ?? 0) === 0) continue;
+    }
+    // 编排队列是唯一真相：用户在「气泡」分区里显式列了这一步，就按队列来；
+    // 旧的两个开关（bubbleClickPages）只在不带队列的默认口径里生效，避免老配置把新队列吃掉。
+    if (legacyGates) {
+      if (kind === 'detail' && options.detail === false) continue;
+      if (kind === 'pricing' && options.pricing === false) continue;
+    }
     if (kind === 'pricing' && !pricingPageAvailable(state)) continue;
     if (kind === 'whisper' && (whisperText === undefined || whisperText === null || whisperText === '')) continue;
     pages.push({ kind, key, step });
@@ -198,7 +218,7 @@ export function resolveBubblePages(
 /** 点击编排的页种类序列：与 {@link resolveBubblePages} 同源，只把页标识换回 kind。 */
 export function clickPageKinds(
   state: BalanceState,
-  steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
+  steps: readonly BubbleClickStep[] | undefined,
   options: BubblePageOptions = {},
   whisperText?: string | null,
   template?: readonly BubbleRowTemplate[],
@@ -211,7 +231,7 @@ export function clickPageKinds(
 /** 点击编排的总页数（custom 形态仍按节点树页数，不受队列影响）。 */
 export function clickPageCount(
   state: BalanceState,
-  steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
+  steps: readonly BubbleClickStep[] | undefined,
   options: BubblePageOptions = {},
   whisperText?: string | null,
   template?: readonly BubbleRowTemplate[],
@@ -229,7 +249,7 @@ export function clickPageCount(
 export function clickPageView(
   state: BalanceState,
   index: number,
-  steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
+  steps: readonly BubbleClickStep[] | undefined,
   options: BubblePageOptions = {},
   whisperText?: string | null,
   template?: readonly BubbleRowTemplate[],

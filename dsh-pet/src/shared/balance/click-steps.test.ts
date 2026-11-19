@@ -108,3 +108,39 @@ test('自定义页没有内容就不出现（旧配置里的全局模板仍可�
   const rows = clickPageView(combined, 0, legacy, {}, null, [{ text: '余额 {balance}' }]);
   assert.match(rows[0].text, /余额/);
 });
+
+test('纯账户金额（DeepSeek 官方 key）也有明细与峰谷页', () => {
+  const money = {
+    provider: 'deepseek-official',
+    shape: 'money',
+    ok: true,
+    wallets: [{ currency: 'CNY', total: '93.05', granted: '0', toppedUp: '93.05', fullBalance: '100' }],
+    todaySpend: 7.82,
+  } as unknown as BalanceState;
+  assert.deepEqual(clickPageKinds(money), ['summary', 'detail', 'pricing']);
+  const detail = clickPageView(money, 1);
+  assert.ok(detail.some((row) => /满额/.test(row.text)));
+  assert.ok(detail.some((row) => /今日已用/.test(row.text)));
+});
+
+test('非 DeepSeek 的账户金额不显示峰谷页，但仍有明细页', () => {
+  const other = {
+    provider: 'opencode-go',
+    shape: 'money',
+    ok: true,
+    wallets: [{ currency: 'USD', total: '5', granted: '0', toppedUp: '5' }],
+  } as unknown as BalanceState;
+  assert.deepEqual(clickPageKinds(other), ['summary', 'detail']);
+});
+
+test('新队列优先：旧的两个开关不会把队列里的明细/峰谷吃掉', () => {
+  const queue = [{ kind: 'summary' }, { kind: 'detail' }, { kind: 'pricing' }] as const;
+  // 老配置里 detail:false（用户手改配置时会残留），队列显式列了明细就该照队列走。
+  assert.deepEqual(clickPageKinds(combined, queue, { detail: false, pricing: false }), [
+    'summary',
+    'detail',
+    'pricing',
+  ]);
+  // 不传队列时（旧口径）这两个开关仍然生效。
+  assert.deepEqual(clickPageKinds(combined, DEFAULT_BUBBLE_CLICK_STEPS, { detail: false }), ['summary', 'pricing']);
+});

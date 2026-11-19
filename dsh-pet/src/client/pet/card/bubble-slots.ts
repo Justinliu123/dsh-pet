@@ -101,12 +101,11 @@ export function decideBubbleSlot(input: BubbleSlotInput): BubbleSlot {
  * @returns 页数，至少 1。
  */
 /** 点击编排默认队列（与 shared 的 DEFAULT_BUBBLE_CLICK_STEPS 同值；放这里避免再导一次常量）。 */
-const DEFAULT_CLICK_STEPS: readonly BubbleClickStep[] = [{ kind: 'summary' }, { kind: 'detail' }, { kind: 'pricing' }];
 
 export function balancePageCount(
   balance: BalanceState | null,
   pages: BubblePageOptions = {},
-  steps: readonly BubbleClickStep[] = DEFAULT_CLICK_STEPS,
+  steps?: readonly BubbleClickStep[],
   whisperText: string | null = null,
   template?: readonly BubbleRowTemplate[],
 ): number {
@@ -302,7 +301,7 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
       const pages = balancePageCount(
         input.balance,
         input.bubblePages,
-        input.bubbleSteps ?? DEFAULT_CLICK_STEPS,
+        input.bubbleSteps,
         whisperText,
         input.bubbleTemplate,
       );
@@ -319,8 +318,8 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
     // 编排设置会随配置热更新；订阅只建一次，所以用 ref 读最新值。
     const bubblePagesRef = useRef<BubblePageOptions>({});
     bubblePagesRef.current = input.bubblePages ?? {};
-    const bubbleStepsRef = useRef<readonly BubbleClickStep[]>(DEFAULT_CLICK_STEPS);
-    bubbleStepsRef.current = input.bubbleSteps ?? DEFAULT_CLICK_STEPS;
+    const bubbleStepsRef = useRef<readonly BubbleClickStep[] | undefined>(input.bubbleSteps);
+    bubbleStepsRef.current = input.bubbleSteps;
     // 自定义页模板同样随配置热更新，订阅只建一次所以也走 ref。
     const bubbleTemplateRef = useRef<readonly BubbleRowTemplate[] | undefined>(input.bubbleTemplate);
     bubbleTemplateRef.current = input.bubbleTemplate;
@@ -465,7 +464,7 @@ export function createBubbleSlots(rt: BubbleSlotsRuntime, components: BubbleComp
               index: balancePage,
               onCycle: cycleBalance,
               pages: input.bubblePages ?? {},
-              steps: input.bubbleSteps ?? DEFAULT_CLICK_STEPS,
+              steps: input.bubbleSteps,
               template: input.bubbleTemplate,
               whisperText,
             });
