@@ -24,8 +24,25 @@ test('非法形状：空数组、超长、未知 kind、enabled 类型错都拒'
   assert.equal(bubbleClickStepsValid([{ kind: 'weather' }]), false);
   assert.equal(bubbleClickStepsValid([{ kind: 'summary', enabled: 'yes' }]), false);
   assert.equal(bubbleClickStepsValid([null]), false);
-  const nine = Array.from({ length: 9 }, () => ({ kind: 'summary' }));
-  assert.equal(bubbleClickStepsValid(nine), false);
+  const thirteen = Array.from({ length: 13 }, () => ({ kind: 'summary' }));
+  assert.equal(bubbleClickStepsValid(thirteen), false);
+});
+
+test('每一页都能带自己的内容：id / title / template 合法就收', () => {
+  assert.equal(
+    bubbleClickStepsValid([
+      { kind: 'custom', id: 'c1', title: '余额速览', template: [{ text: '余额 {balance}', color: '#ffd479', size: 16, align: 'center', bold: true }] },
+      { kind: 'summary', template: [{ text: '周额度 {weekly}' }] },
+    ]),
+    true,
+  );
+  // id 只收字母数字与下划线短横线；title 超 40 字拒；template 非法行拒。
+  assert.equal(bubbleClickStepsValid([{ kind: 'custom', id: '有中文' }]), false);
+  assert.equal(bubbleClickStepsValid([{ kind: 'custom', title: 'x'.repeat(41) }]), false);
+  assert.equal(bubbleClickStepsValid([{ kind: 'custom', template: [{ text: '' }] }]), false);
+  assert.equal(bubbleClickStepsValid([{ kind: 'custom', template: [{ text: 'ok', color: 'red' }] }]), false);
+  assert.equal(bubbleClickStepsValid([{ kind: 'custom', template: [{ text: 'ok', size: 99 }] }]), false);
+  assert.equal(bubbleClickStepsValid([{ kind: 'custom', template: 'nope' }]), false);
 });
 
 test('顶层字段白名单认得 bubbleClickSteps', () => {

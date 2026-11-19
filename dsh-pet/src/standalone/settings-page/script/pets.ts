@@ -50,16 +50,32 @@ function defaultBubbleSteps(pages) {
   ];
 }
 
-/** 点击编排队列：优先读 bubbleClickSteps，缺键时按旧的 bubbleClickPages 两开关推出默认队列。 */
+/**
+ * 点击编排队列：优先读 bubbleClickSteps，缺键时按旧的 bubbleClickPages 两开关推出默认队列。
+ *
+ * 每一步的 id / title / template 都要留住：多份自定义页靠 id 区分，
+ * 「编辑过某一页」靠它自己的 template 留住。旧配置里的全局 bubbleTemplate
+ * 会灌进没有自己模板的自定义页里（升级后用户能在设置页里继续改）。
+ */
 function pickBubbleSteps(source) {
   const raw = Array.isArray(source.bubbleClickSteps) && source.bubbleClickSteps.length
     ? source.bubbleClickSteps
     : defaultBubbleSteps(source.bubbleClickPages);
   const known = { summary: true, detail: true, pricing: true, whisper: true, custom: true };
-  return raw.slice(0, 8).map(function (step) {
+  const legacy = pickBubbleTemplate(source.bubbleTemplate);
+  const out = [];
+  for (let i = 0; i < raw.length && out.length < 12; i += 1) {
+    const step = raw[i];
     const kind = step && typeof step.kind === 'string' && known[step.kind] ? step.kind : 'summary';
-    return { kind: kind, enabled: !step || step.enabled !== false };
-  });
+    const next = { kind: kind, enabled: !step || step.enabled !== false };
+    if (step && typeof step.id === 'string' && step.id.trim() !== '') next.id = step.id.trim();
+    if (step && typeof step.title === 'string' && step.title.trim() !== '') next.title = step.title.trim();
+    const rows = pickBubbleTemplate(step && step.template);
+    if (rows.length > 0) next.template = rows;
+    else if (kind === 'custom' && legacy.length > 0) next.template = legacy.map(function (row) { return Object.assign({}, row); });
+    out.push(next);
+  }
+  return out;
 }
 
 /** 自定义页模板：只保留有文本的行，归一化颜色/字号/对齐（消费端与校验层同口径）。 */

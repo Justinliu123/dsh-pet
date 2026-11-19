@@ -260,13 +260,30 @@ async function settle(): Promise<void> {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
-test('气泡自定义页：编辑行只刷新预览、不整面板重建（否则输入一个字符丢焦点）', () => {
+test('气泡页编辑：改一行只刷新预览、不整面板重建（否则输入一个字符丢焦点）', () => {
   const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
-  assert.match(script, /function refreshBubblePreview/);
-  const body = script.match(/function setBubbleTemplateRow[\s\S]*?\n}/)?.[0] ?? '';
-  assert.ok(body.length > 0, '应生成 setBubbleTemplateRow');
-  assert.match(body, /refreshBubblePreview\(\)/);
+  assert.match(script, /function refreshBubbleStepPreview/);
+  const body = script.match(/function setBubbleStepRow[\s\S]*?\n}/)?.[0] ?? '';
+  assert.ok(body.length > 0, '应生成 setBubbleStepRow');
+  assert.match(body, /refreshBubbleStepPreview\(/);
   assert.doesNotMatch(body, /renderBubblePanel/);
+});
+
+test('气泡页编辑：每一页都能编辑，自定义页可以建多份', () => {
+  const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
+  // 每一步都有「编辑」按钮：预置页与自定义页一视同仁。
+  assert.match(script, /function toggleBubbleStepEdit/);
+  assert.match(script, /function bubbleStepEditor/);
+  assert.match(script, /function bubbleStepPreview/);
+  assert.match(script, /function setBubbleStepRow/);
+  // 多份自定义页：新建时生成不重复的 id，各自带自己的模板。
+  assert.match(script, /function addCustomBubblePage/);
+  assert.match(script, /＋ 新建自定义页/);
+  assert.match(script, /id: 'c' \+ n/);
+  assert.match(script, /BUBBLE_CUSTOM_DEFAULT_ROWS/);
+  // 预置页第一次编辑会预填占位符种子，用户看得见这一页能写什么。
+  assert.match(script, /BUBBLE_STEP_SEEDS/);
+  assert.match(script, /恢复这一页的默认内容/);
 });
 
 test('气泡自定义页：页面上有占位符说明与可点击插入的 chip', () => {
@@ -357,9 +374,9 @@ test('settings shell is accessible, self contained, and never saves browser secr
   assert.match(settingsScript, /function moveBubbleStep/);
   assert.match(settingsScript, /function setBubbleStepEnabled/);
   assert.match(settingsScript, /bubbleClickSteps/);
-  assert.match(settingsScript, /function bubbleTemplateCard/);
-  assert.match(settingsScript, /function bubbleTemplatePreview/);
-  assert.match(settingsScript, /function setBubbleTemplateRow/);
+  assert.match(settingsScript, /function bubbleStepEditor/);
+  assert.match(settingsScript, /function bubbleStepPreview/);
+  assert.match(settingsScript, /function setBubbleStepRow/);
   assert.match(settingsScript, /BUBBLE_PLACEHOLDERS/);
   assert.match(settingsScript, /SAMPLE_BUBBLE_CONTEXT/);
   // 队列要能加/删步骤：预制步骤可删（×），自定义页可以从「加入编排」拉进来。

@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { BUBBLE_PLACEHOLDERS, bubbleTemplateContext, fillBubbleTemplate, renderBubbleTemplate } from './template.ts';
+import {
+  BUBBLE_CUSTOM_DEFAULT_ROWS,
+  BUBBLE_PLACEHOLDERS,
+  bubbleStepSeedTemplate,
+  bubbleTemplateContext,
+  fillBubbleTemplate,
+  renderBubbleTemplate,
+} from './template.ts';
 import { clickPageCount, clickPageKinds, clickPageView } from './view.ts';
 import type { BalanceState } from './types.ts';
 
@@ -82,4 +89,17 @@ test('占位符目录覆盖价格与时间，供设置页下拉使用', () => {
   for (const token of ['balance', 'todaySpend', 'rolling', 'weekly', 'peakStatus', 'peakCountdown', 'flashHit', 'proOut', 'whisper', 'date', 'time']) {
     assert.ok(tokens.includes(token), token);
   }
+});
+
+test('预置页的编辑种子：每一页都有可用的占位符模板', () => {
+  const summary = bubbleStepSeedTemplate('summary');
+  assert.ok(summary.length > 0);
+  assert.match(summary[0].text, /\{balance\}/);
+  const pricing = bubbleStepSeedTemplate('pricing');
+  assert.ok(pricing.some((row) => row.text.includes('{peakStatus}')));
+  const whisper = bubbleStepSeedTemplate('whisper');
+  assert.match(whisper[0].text, /\{whisper\}/);
+  // 自定义页新建时的默认行。
+  assert.ok(BUBBLE_CUSTOM_DEFAULT_ROWS.length > 0);
+  assert.match(BUBBLE_CUSTOM_DEFAULT_ROWS[0].text, /\{balance\}/);
 });

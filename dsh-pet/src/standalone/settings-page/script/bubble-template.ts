@@ -1,9 +1,13 @@
 /**
- * 「气泡」分区里的自定义页编辑器与预览。
+ * 「气泡」分区里每一页的内容编辑器与预览。
  *
- * 占位符目录与预览数据由 `settingsPage.ts` 从 shared 注入（页面脚本不能 import），
- * 渲染规则与气泡完全同源：文本里的 `{token}` 用同一份上下文替换，颜色/字号/对齐直接映射成
- * 内联样式，所以这里看到的预览与桌宠上看到的一致。
+ * 编排队列里的每一步（预置的余额/明细/峰谷/碎碎念，以及任意多份自定义页）都能单独编辑：
+ * 这一页的文字、`{token}` 占位符、颜色、字号、对齐都挂在**这一步自己**的模板上，
+ * 队列里有多份自定义页时互不干扰。
+ *
+ * 占位符目录、预置页的编辑种子与预览数据由 `settingsPage.ts` 从 shared 注入
+ * （页面脚本不能 import），渲染规则与气泡完全同源：文本里的 `{token}` 用同一份上下文替换，
+ * 颜色/字号/对齐直接映射成内联样式，所以这里看到的预览与桌宠上看到的一致。
  * @module dsh-pet/src/standalone/settings-page/script/bubble-template
  */
 
@@ -14,14 +18,20 @@ export interface BubbleTemplateScriptOptions {
   readonly context: Record<string, string>;
   /** 颜色输入的默认值（新增行时用）。 */
   readonly defaultColor: string;
+  /** 新建自定义页时的默认行（值由 shared 的 BUBBLE_CUSTOM_DEFAULT_ROWS 提供）。 */
+  readonly defaultRows: readonly { readonly text: string; readonly size?: number; readonly align?: string }[];
+  /** 预置页的编辑种子：点「编辑」时预填什么（值由 shared 的 bubbleStepSeedTemplate 提供）。 */
+  readonly stepSeeds: Record<string, readonly { readonly text: string; readonly size?: number; readonly align?: string }[]>;
 }
 
-/** 生成自定义页编辑器脚本片段。 */
+/** 生成气泡页编辑器脚本片段。 */
 export function bubbleTemplateScript(options: BubbleTemplateScriptOptions): string {
   return `
 var BUBBLE_PLACEHOLDERS = ${JSON.stringify(options.placeholders)};
 var SAMPLE_BUBBLE_CONTEXT = ${JSON.stringify(options.context)};
 var DEFAULT_ROW_COLOR = ${JSON.stringify(options.defaultColor)};
+var BUBBLE_CUSTOM_DEFAULT_ROWS = ${JSON.stringify(options.defaultRows)};
+var BUBBLE_STEP_SEEDS = ${JSON.stringify(options.stepSeeds)};
 var BUBBLE_ROW_ALIGNS = ['left', 'center', 'right'];
 /** 最近一次聚焦的模板行输入框：点占位符时优先插到这一行（点 chip 会先抢走焦点）。 */
 var bubbleLastRowInput = null;
@@ -34,56 +44,90 @@ function fillBubbleTemplateText(text) {
   });
 }
 
-function bubbleTemplate() {
-  if (!Array.isArray(state.globals.bubbleTemplate)) state.globals.bubbleTemplate = [];
-  return state.globals.bubbleTemplate;
+/** 复制一份行（新建页/预置页种子时用，避免共用同一个对象）。 */
+function copyBubbleRows(rows) {
+  var out = [];
+  for (var i = 0; i < (rows || []).length; i += 1) out.push(Object.assign({}, rows[i]));
+  return out;
+}
+
+/** 队列里第 index 步的内容行（没有模板就建一个空数组）。 */
+function bubbleStepRows(index) {
+  var steps = state.globals.bubbleClickSteps || [];
+  var step = steps[index];
+  if (!step) return [];
+  if (!Array.isArray(step.template)) step.template = [];
+  return step.template;
+}
+
+/** 队列里第 index 步（没有就 undefined）。 */
+function bubbleStepAt(index) {
+  var steps = state.globals.bubbleClickSteps || [];
+  return steps[index];
+}
+
+/** 这一步的名字：自定义页用用户起的名字，预置页按 kind 给默认名。 */
+function bubbleStepTitle(step, index) {
+  if (step && typeof step.title === 'string' && step.title.trim() !== '') return step.title;
+  if (step && step.kind === 'custom') return '自定义页 ' + ((typeof step.id === 'string' && step.id) || index + 1);
+  return bubbleStepLabel(step.kind);
 }
 
 /**
  * 改一行的某个字段。注意：**不能**在这里调 renderBubblePanel()——重建整个面板会让用户正在输入的
  * input 被替换掉、焦点与光标位置全丢（输入一个字符断一次）。这里只改状态并就地刷新预览。
  */
-function setBubbleTemplateRow(index, patch) {
-  var rows = bubbleTemplate();
-  if (index < 0 || index >= rows.length) return;
-  var next = Object.assign({}, rows[index], patch);
-  rows[index] = next;
+function setBubbleStepRow(index, rowIndex, patch) {
+  var rows = bubbleStepRows(index);
+  if (rowIndex < 0 || rowIndex >= rows.length) return;
+  var next = Object.assign({}, rows[rowIndex], patch);
+  rows[rowIndex] = next;
   markDirty(true);
-  refreshBubblePreview();
+  refreshBubbleStepPreview(index);
 }
 
-function addBubbleTemplateRow() {
-  var rows = bubbleTemplate();
+/** 改这一步的名字（自定义页可自取名）。 */
+function setBubbleStepTitle(index, title) {
+  var step = bubbleStepAt(index);
+  if (!step) return;
+  var value = String(title === undefined || title === null ? '' : title);
+  if (value.trim() === '') delete step.title;
+  else step.title = value;
+  markDirty(true);
+}
+
+function addBubbleStepRow(index) {
+  var rows = bubbleStepRows(index);
   if (rows.length >= 6) return;
   rows.push({ text: '余额 {balance}', color: DEFAULT_ROW_COLOR, size: 12, align: 'center' });
   markDirty(true);
   renderBubblePanel();
 }
 
-function removeBubbleTemplateRow(index) {
-  var rows = bubbleTemplate();
+function removeBubbleStepRow(index, rowIndex) {
+  var rows = bubbleStepRows(index);
   if (rows.length <= 1) return;
-  rows.splice(index, 1);
+  rows.splice(rowIndex, 1);
   markDirty(true);
   renderBubblePanel();
 }
 
-function moveBubbleTemplateRow(index, delta) {
-  var rows = bubbleTemplate();
-  var target = index + delta;
+function moveBubbleStepRow(index, rowIndex, delta) {
+  var rows = bubbleStepRows(index);
+  var target = rowIndex + delta;
   if (target < 0 || target >= rows.length) return;
-  var tmp = rows[index];
-  rows[index] = rows[target];
+  var tmp = rows[rowIndex];
+  rows[rowIndex] = rows[target];
   rows[target] = tmp;
   markDirty(true);
   renderBubblePanel();
 }
 
 /** 预览：与气泡同一套替换规则与内联样式，让用户不点宠物也能看到效果。 */
-function bubbleTemplatePreview() {
-  var rows = bubbleTemplate();
+function bubbleStepPreview(index) {
+  var rows = bubbleStepRows(index);
   var box = make('div', { class: 'bubblePreview' });
-  box.setAttribute('data-bubble-preview', '1');
+  box.setAttribute('data-bubble-preview', String(index));
   for (var i = 0; i < rows.length; i += 1) {
     var row = rows[i];
     var line = make('div', { class: 'bubblePreviewLine', text: fillBubbleTemplateText(row.text) });
@@ -99,11 +143,11 @@ function bubbleTemplatePreview() {
 /**
  * 就地重画预览（不动输入框）：编辑时只刷新预览，保证输入焦点与光标不被重建打断。
  */
-function refreshBubblePreview() {
-  var box = document.querySelector('[data-bubble-preview]');
+function refreshBubbleStepPreview(index) {
+  var box = document.querySelector('[data-bubble-preview="' + index + '"]');
   if (!box) return;
   box.textContent = '';
-  var rows = bubbleTemplate();
+  var rows = bubbleStepRows(index);
   for (var i = 0; i < rows.length; i += 1) {
     var row = rows[i];
     var line = make('div', { class: 'bubblePreviewLine', text: fillBubbleTemplateText(row.text) });
@@ -149,28 +193,31 @@ function appendPlaceholderToFocusedRow(token) {
   var input = active && active.classList && active.classList.contains('wideInput') ? active : null;
   // 点 chip 时焦点在按钮上，退回到「最近编辑过的那一行」，而不是永远第一行。
   if (!input && bubbleLastRowInput && document.contains(bubbleLastRowInput)) input = bubbleLastRowInput;
-  if (!input) input = document.querySelector('.bubbleRowEditor .wideInput');
+  if (!input) input = document.querySelector('.bubbleStepEditor .wideInput');
   if (!input) return;
   input.value = input.value + snippet;
-  var index = Number(input.getAttribute('data-row'));
-  if (isNaN(index)) index = 0;
-  setBubbleTemplateRow(index, { text: input.value });
+  var stepIndex = Number(input.getAttribute('data-step'));
+  var rowIndex = Number(input.getAttribute('data-row'));
+  if (isNaN(stepIndex)) stepIndex = 0;
+  if (isNaN(rowIndex)) rowIndex = 0;
+  setBubbleStepRow(stepIndex, rowIndex, { text: input.value });
   input.focus();
   var pos = input.value.length;
   if (input.setSelectionRange) input.setSelectionRange(pos, pos);
 }
 
-/** 一行模板的编辑控件：文本 + 插入占位符 + 颜色 + 字号 + 对齐 + 排序/删除。 */
-function bubbleTemplateRowEditor(row, index, total) {
+/** 一行模板的编辑控件：文本 + 插入占位符 + 加粗 + 颜色 + 字号 + 对齐 + 排序/删除。 */
+function bubbleStepRowEditor(index, row, rowIndex, total) {
   var text = make('input', { type: 'text', class: 'wideInput', value: row.text, maxLength: 120 });
-  text.setAttribute('data-row', String(index));
+  text.setAttribute('data-row', String(rowIndex));
+  text.setAttribute('data-step', String(index));
   text.placeholder = '例如：余额 {balance} · 周额度剩 {weekly}';
   text.addEventListener('focus', function () {
     bubbleLastRowInput = text;
   });
   text.addEventListener('input', function () {
     bubbleLastRowInput = text;
-    setBubbleTemplateRow(index, { text: text.value });
+    setBubbleStepRow(index, rowIndex, { text: text.value });
   });
 
   var insert = make('select', { class: 'bubbleInsert' });
@@ -185,24 +232,24 @@ function bubbleTemplateRowEditor(row, index, total) {
     var start = text.selectionStart === null ? text.value.length : text.selectionStart;
     text.value = text.value.slice(0, start) + snippet + text.value.slice(start);
     insert.value = '';
-    setBubbleTemplateRow(index, { text: text.value });
+    setBubbleStepRow(index, rowIndex, { text: text.value });
   });
 
   var boldBox = make('input', { type: 'checkbox', class: 'bubbleBoldBox', checked: row.bold === true, title: '加粗' });
   boldBox.addEventListener('change', function () {
-    setBubbleTemplateRow(index, { bold: boldBox.checked });
+    setBubbleStepRow(index, rowIndex, { bold: boldBox.checked });
   });
   var bold = make('label', { class: 'bubbleBold', title: '加粗' }, [boldBox, make('span', { text: '粗体' })]);
 
   var color = make('input', { type: 'color', value: row.color || DEFAULT_ROW_COLOR, title: '文字颜色' });
   color.addEventListener('input', function () {
-    setBubbleTemplateRow(index, { color: color.value });
+    setBubbleStepRow(index, rowIndex, { color: color.value });
   });
 
   var size = make('input', { type: 'number', class: 'bubbleSize', value: String(row.size || 12), min: '8', max: '48', step: '1', title: '字号（px）' });
   size.addEventListener('change', function () {
     var value = clampNumber(size.value, 8, 48, 12);
-    setBubbleTemplateRow(index, { size: value });
+    setBubbleStepRow(index, rowIndex, { size: value });
   });
 
   var align = make('select', { class: 'bubbleAlign', title: '对齐' });
@@ -213,50 +260,71 @@ function bubbleTemplateRowEditor(row, index, total) {
     align.appendChild(option);
   }
   align.addEventListener('change', function () {
-    setBubbleTemplateRow(index, { align: align.value });
+    setBubbleStepRow(index, rowIndex, { align: align.value });
   });
 
   var up = make('button', { type: 'button', class: 'btn ghost', text: '↑' });
   up.title = '上移';
-  up.disabled = index === 0;
+  up.disabled = rowIndex === 0;
   up.addEventListener('click', function () {
-    moveBubbleTemplateRow(index, -1);
+    moveBubbleStepRow(index, rowIndex, -1);
   });
   var down = make('button', { type: 'button', class: 'btn ghost', text: '↓' });
   down.title = '下移';
-  down.disabled = index === total - 1;
+  down.disabled = rowIndex === total - 1;
   down.addEventListener('click', function () {
-    moveBubbleTemplateRow(index, 1);
+    moveBubbleStepRow(index, rowIndex, 1);
   });
   var remove = make('button', { type: 'button', class: 'btn ghost', text: '×' });
   remove.title = '删除这一行';
   remove.disabled = total <= 1;
   remove.addEventListener('click', function () {
-    removeBubbleTemplateRow(index);
+    removeBubbleStepRow(index, rowIndex);
   });
 
   return make('div', { class: 'bubbleRowEditor' }, [text, insert, bold, color, size, align, up, down, remove]);
 }
 
-/** 自定义页卡片：行编辑器 + 实时预览 + 「加一行」。 */
-function bubbleTemplateCard() {
-  var rows = bubbleTemplate();
-  var editors = rows.map(function (row, index) {
-    return bubbleTemplateRowEditor(row, index, rows.length);
-  });
+/** 某一步的编辑面板：预览 + 占位符说明 + 逐行编辑 + 加一行。 */
+function bubbleStepEditor(index) {
+  var step = bubbleStepAt(index);
+  var wrap = make('div', { class: 'bubbleStepEditor' });
+  if (!step) return wrap;
+  wrap.appendChild(make('p', { class: 'bubbleStepEditorTitle', text: '正在编辑：' + bubbleStepTitle(step, index) }));
+
+  if (step.kind === 'custom') {
+    var title = make('input', { type: 'text', class: 'wideInput', value: step.title || '', maxLength: 40 });
+    title.placeholder = '这一页的名字（例如：余额速览）';
+    title.addEventListener('input', function () {
+      setBubbleStepTitle(index, title.value);
+    });
+    wrap.appendChild(make('div', { class: 'bubbleStepTitleRow' }, [title]));
+  }
+
+  var rows = bubbleStepRows(index);
+  wrap.appendChild(make('div', { class: 'bubblePreviewWrap' }, [bubbleStepPreview(index)]));
+  wrap.appendChild(bubblePlaceholderHint());
+  for (var i = 0; i < rows.length; i += 1) {
+    wrap.appendChild(bubbleStepRowEditor(index, rows[i], i, rows.length));
+  }
   var add = make('button', { type: 'button', class: 'btn ghost', text: '＋ 加一行（最多 6 行）' });
   add.disabled = rows.length >= 6;
   add.addEventListener('click', function () {
-    addBubbleTemplateRow();
+    addBubbleStepRow(index);
   });
-  return card(
-    '自定义页',
-    '「点击编排」里加一步「自定义页」后，这一页就按下面的行渲染：每行是一段文本，占位符渲染时替换成实时数据，颜色只收 #rgb/#rrggbb，字号 8~48，最多 6 行。编辑时上面的预览会实时更新。',
-    [
-      make('div', { class: 'bubblePreviewWrap' }, [bubbleTemplatePreview()]),
-      bubblePlaceholderHint(),
-    ].concat(editors).concat([add]),
-  );
+  wrap.appendChild(add);
+
+  if (step.kind !== 'custom') {
+    // 预置页被编辑过：给一条「恢复默认」——删掉这一页自己的模板就回到内置内容。
+    var reset = make('button', { type: 'button', class: 'btn ghost', text: '恢复这一页的默认内容' });
+    reset.addEventListener('click', function () {
+      delete step.template;
+      markDirty(true);
+      renderBubblePanel();
+    });
+    wrap.appendChild(reset);
+  }
+  return wrap;
 }
 `;
 }

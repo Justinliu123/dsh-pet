@@ -117,16 +117,85 @@ export const DEFAULT_BUBBLE_CLICK_STEPS: readonly BubbleClickStep[] = [
   { kind: 'pricing' },
 ];
 
+/** 点击编排解析出的一页：kind + 页标识 + 这一步的配置。 */
+export interface ResolvedBubblePage {
+  readonly kind: BubblePageKind;
+  /** 页标识：自定义页按 id（没 id 就按序号），预置页按 kind。 */
+  readonly key: string;
+  /** 对应的队列步骤（页内容优先用 step.template）。 */
+  readonly step: BubbleClickStep;
+  /** detail 步骤在服务商给了区间用量时多出来的一页。 */
+  readonly variant?: 'usage';
+}
+
+/** 这一页的标识：自定义页按 id 区分（没 id 就按序号，保证多份自定义页不互相顶掉）。 */
+function bubbleStepKey(step: BubbleClickStep, index: number): string {
+  if (step.kind === 'custom') {
+    const id = typeof step.id === 'string' ? step.id.trim() : '';
+    return id === '' ? 'custom@' + index : 'custom#' + id;
+  }
+  return step.kind;
+}
+
+/** 这一页用哪份模板：步骤自带模板优先；自定义页没带就回落旧的全局 bubbleTemplate。 */
+function bubbleStepRows(
+  step: BubbleClickStep,
+  legacy?: readonly BubbleRowTemplate[],
+): readonly BubbleRowTemplate[] | undefined {
+  if (Array.isArray(step.template) && step.template.length > 0) return step.template;
+  if (step.kind === 'custom' && Array.isArray(legacy) && legacy.length > 0) return legacy;
+  return undefined;
+}
+
 /** 点击编排的最终页序列：按队列顺序过滤可用性，再兜底。
  *
  * 规则（与设置页「气泡 → 点击编排」一一对应）：
- * - enabled === false 的步骤跳过；同类步骤只保留第一次出现（重复不重复弹）。
+ * - enabled === false 的步骤跳过；同一页标识只保留第一次出现（重复不重复弹）。
+ * - 自定义页可以放多份：靠步骤的 id 区分，各自带各的模板。
+ * - 步骤自带模板的页按模板渲染（用户在设置页里把这一页改过了）；
+ *   detail 带模板时不再拆出「用量」页——那一页已经是他自己定义的样子。
  * - detail 步骤在服务商给了区间用量时展开成「明细 + 用量」两页（页数/内容同源）。
  * - pricing 只在「组合视图」（有 DeepSeek 账户余额 + 窗口额度）时可用；
  *   whisper 页要有最近一条碎碎念文案，否则跳过（不弹空白页）。
  * - 旧配置的 detail/pricing 开关仍然生效（options），并在新队列优先时作为兜底。
  * - 全部被关掉时退回收起态一页，绝不让点击变成什么都没发生。
  */
+export function resolveBubblePages(
+  state: BalanceState,
+  steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
+  options: BubblePageOptions = {},
+  whisperText?: string | null,
+  template?: readonly BubbleRowTemplate[],
+): ResolvedBubblePage[] {
+  const seen = new Set<string>();
+  const pages: ResolvedBubblePage[] = [];
+  for (let index = 0; index < steps.length; index += 1) {
+    const step = steps[index];
+    if (step === null || typeof step !== 'object') continue;
+    if (step.enabled === false) continue;
+    const kind = step.kind;
+    if (kind !== 'summary' && kind !== 'detail' && kind !== 'pricing' && kind !== 'whisper' && kind !== 'custom') continue;
+    const key = bubbleStepKey(step, index);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const rows = bubbleStepRows(step, template);
+    // 自定义页没有内容就不显示（没配就等于没这一步）。
+    if (kind === 'custom' && (rows === undefined || rows.length === 0)) continue;
+    // 明细/用量只有窗口形态有；money/points 这类内置单页形态点了也只该有一页。
+    if (kind === 'detail' && (!state.ok || state.shape !== 'windows')) continue;
+    if (kind === 'detail' && options.detail === false) continue;
+    if (kind === 'pricing' && options.pricing === false) continue;
+    if (kind === 'pricing' && !pricingPageAvailable(state)) continue;
+    if (kind === 'whisper' && (whisperText === undefined || whisperText === null || whisperText === '')) continue;
+    pages.push({ kind, key, step });
+    if (kind === 'detail' && state.ok && state.usage && rows === undefined) {
+      pages.push({ kind, key: key + '#usage', step, variant: 'usage' });
+    }
+  }
+  return pages;
+}
+
+/** 点击编排的页种类序列：与 {@link resolveBubblePages} 同源，只把页标识换回 kind。 */
 export function clickPageKinds(
   state: BalanceState,
   steps: readonly BubbleClickStep[] = DEFAULT_BUBBLE_CLICK_STEPS,
@@ -134,26 +203,9 @@ export function clickPageKinds(
   whisperText?: string | null,
   template?: readonly BubbleRowTemplate[],
 ): BubbleClickPage[] {
-  const seen = new Set<BubblePageKind>();
-  const pages: BubbleClickPage[] = [];
-  for (const step of steps) {
-    if (step === null || typeof step !== 'object') continue;
-    if (step.enabled === false) continue;
-    const kind = step.kind;
-    if (kind !== 'summary' && kind !== 'detail' && kind !== 'pricing' && kind !== 'whisper' && kind !== 'custom') continue;
-    if (seen.has(kind)) continue;
-    seen.add(kind);
-    // 明细/用量只有窗口形态有；money/points 这类内置单页形态点了也只该有一页。
-    if (kind === 'detail' && (!state.ok || state.shape !== 'windows')) continue;
-    if (kind === 'detail' && options.detail === false) continue;
-    if (kind === 'pricing' && options.pricing === false) continue;
-    if (kind === 'pricing' && !pricingPageAvailable(state)) continue;
-    if (kind === 'whisper' && (whisperText === undefined || whisperText === null || whisperText === '')) continue;
-    if (kind === 'custom' && (template === undefined || template.length === 0)) continue;
-    pages.push(kind);
-    if (kind === 'detail' && state.ok && state.usage) pages.push('usage');
-  }
-  return pages.length > 0 ? pages : ['summary'];
+  const pages = resolveBubblePages(state, steps, options, whisperText, template);
+  if (pages.length === 0) return ['summary'];
+  return pages.map((page) => (page.variant === 'usage' ? 'usage' : page.kind));
 }
 
 /** 点击编排的总页数（custom 形态仍按节点树页数，不受队列影响）。 */
@@ -166,7 +218,7 @@ export function clickPageCount(
 ): number {
   if (!state.ok) return 1;
   if (state.shape === 'custom') return Math.max(1, customViews(state)?.length ?? 1);
-  return clickPageKinds(state, steps, options, whisperText, template).length;
+  return resolveBubblePages(state, steps, options, whisperText, template).length;
 }
 
 /**
@@ -187,14 +239,20 @@ export function clickPageView(
     const views = customViews(state) ?? [];
     return views.length === 0 ? [] : [];
   }
-  const kinds = clickPageKinds(state, steps, options, whisperText, template);
-  const kind = kinds[Math.min(Math.max(index, 0), kinds.length - 1)];
+  const pages = resolveBubblePages(state, steps, options, whisperText, template);
+  const list: readonly ResolvedBubblePage[] =
+    pages.length > 0 ? pages : [{ kind: 'summary', key: 'summary', step: { kind: 'summary' } }];
+  const page = list[Math.min(Math.max(index, 0), list.length - 1)];
   const handler = HANDLERS[state.shape];
-  if (kind === 'custom') return renderBubbleTemplate(template, state, whisperText);
-  if (kind === 'whisper') return [{ role: 'label', text: whisperText ?? '' }];
-  if (kind === 'pricing') return pricingRows();
-  if (kind === 'detail') return balanceDetailView(state);
-  if (kind === 'usage') return handler.usage?.(state) ?? balanceDetailView(state);
+  // 这一页自带模板就按模板渲染（用户在设置页里把这一页改成了自己的内容）。
+  const rows = bubbleStepRows(page.step, template);
+  if (rows !== undefined && rows.length > 0) return renderBubbleTemplate(rows, state, whisperText);
+  if (page.kind === 'custom') return renderBubbleTemplate(template, state, whisperText);
+  if (page.kind === 'whisper') return [{ role: 'label', text: whisperText ?? '' }];
+  if (page.kind === 'pricing') return pricingRows();
+  if (page.kind === 'detail') {
+    return page.variant === 'usage' ? handler.usage?.(state) ?? balanceDetailView(state) : balanceDetailView(state);
+  }
   return handler.rows(state);
 }
 

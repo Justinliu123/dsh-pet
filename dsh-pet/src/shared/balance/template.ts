@@ -7,7 +7,7 @@
  * @module dsh-pet/src/shared/balance/template
  */
 import type { BalanceState } from './types.ts';
-import type { BalanceBubbleRow, BubbleRowStyle, BubbleRowTemplate } from './types.ts';
+import type { BalanceBubbleRow, BubblePageKind, BubbleRowStyle, BubbleRowTemplate } from './types.ts';
 import { FLASH_PRICE, PRO_PRICE, countdownText, isPeakAt, nextSwitchAt } from './pricing.ts';
 
 /** 占位符目录：设置页按这份清单渲染「插入占位符」，注释即用户看到的说明。 */
@@ -140,4 +140,40 @@ export function sampleBubbleState(): BalanceState {
     accountTier: 'peak',
     todaySpend: 19.25,
   } as unknown as BalanceState;
+}
+
+/** 新建自定义页时的默认行：一条余额 + 一条今日已用，用户再按需改。 */
+export const BUBBLE_CUSTOM_DEFAULT_ROWS: readonly BubbleRowTemplate[] = [
+  { text: '余额 {balance}', size: 14, align: 'center' },
+  { text: '今日已用 {todaySpend}', size: 11, align: 'center' },
+];
+
+/**
+ * 预置页的「编辑种子」：用户点某一页的「编辑」时用这套占位符预填，
+ * 让用户一眼看清这一页能写什么，再逐行改。
+ */
+export function bubbleStepSeedTemplate(kind: BubblePageKind): BubbleRowTemplate[] {
+  switch (kind) {
+    case 'summary':
+      return [
+        { text: '余额 {balance}', size: 15, align: 'left' },
+        { text: '今日已用 {todaySpend}', size: 11, align: 'left' },
+        { text: '周额度剩 {weekly} · {weeklyReset}', size: 11, align: 'left' },
+      ];
+    case 'detail':
+      return [
+        { text: '5h 剩余 {rolling} · {rollingReset}', size: 13, align: 'left' },
+        { text: '周剩余 {weekly} · {weeklyReset}', size: 13, align: 'left' },
+      ];
+    case 'pricing':
+      return [
+        { text: '{peakStatus} · {peakCountdown}', size: 12, align: 'left' },
+        { text: 'Flash {flashHit} / {flashMiss} / {flashOut}', size: 11, align: 'left' },
+        { text: 'Pro {proHit} / {proMiss} / {proOut}', size: 11, align: 'left' },
+      ];
+    case 'whisper':
+      return [{ text: '{whisper}', size: 13, align: 'left' }];
+    default:
+      return BUBBLE_CUSTOM_DEFAULT_ROWS.map((row) => ({ ...row }));
+  }
 }

@@ -17,7 +17,13 @@ import { DEFAULT_FONT, FONT_PRESETS } from '../shared/fonts.ts';
 import { POWERCONTEXT_MEMORY_ID } from '../shared/memory.ts';
 import { DEFAULT_PHYSICS } from '../shared/physics.ts';
 import { DEFAULT_WEIGHTS } from '../shared/weights.ts';
-import { BUBBLE_PLACEHOLDERS, bubbleTemplateContext, sampleBubbleState } from '../shared/balance/template.ts';
+import {
+  BUBBLE_CUSTOM_DEFAULT_ROWS,
+  BUBBLE_PLACEHOLDERS,
+  bubbleStepSeedTemplate,
+  bubbleTemplateContext,
+  sampleBubbleState,
+} from '../shared/balance/template.ts';
 import { aiScript } from './settings-page/script/ai.ts';
 import { avatarScript } from './settings-page/script/avatar.ts';
 import { bootScript } from './settings-page/script/boot.ts';
@@ -61,6 +67,13 @@ export const settingsScript = [
     placeholders: BUBBLE_PLACEHOLDERS,
     context: bubbleTemplateContext(sampleBubbleState(), '今晚早点休息——要不要一起把今天的额度用完？'),
     defaultColor: '#e6e8ee',
+    defaultRows: BUBBLE_CUSTOM_DEFAULT_ROWS,
+    stepSeeds: {
+      summary: bubbleStepSeedTemplate('summary'),
+      detail: bubbleStepSeedTemplate('detail'),
+      pricing: bubbleStepSeedTemplate('pricing'),
+      whisper: bubbleStepSeedTemplate('whisper'),
+    },
   }),
   overlayScript(),
   avatarScript({ logoUrl: LOGO_URL, maxSide: AVATAR_MAX_SIDE_PX }),

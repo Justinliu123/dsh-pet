@@ -6,18 +6,26 @@
 
 | 用途 | 路径 |
 | --- | --- |
-| 可执行文件 | `E:\projects\dsh-pet\app\dsh-pet.exe`（junction，指向 `dsh-pet\dist-app\win-unpacked`） |
+| 可执行文件 | `E:\projects\dsh-pet\app\dsh-pet.exe`（junction，指向 `D:\deepseek\dsh-pet-app\win-unpacked`） |
 | 桌面快捷方式 | 桌面「DSH 桌宠」 |
 | 开机自启 | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\DSH-Pet.lnk` |
-| 用户数据（配置/账本/日志） | `C:\Users\Lenovo\.dsh\dsh-pet\`（与 DSH 插件共用） |
+| 用户数据（配置/账本/日志） | `D:\deepseek\dsh-pet\`（与 DSH 插件共用同一个 DSH 数据根） |
 | Electron userData | `C:\Users\Lenovo\AppData\Roaming\dsh-pet\` |
+
+> 数据目录跟着 DSH 走：DSH NEXT 把数据根记在 `%APPDATA%\DSH NEXT\home\desktop-next-location.json` 里
+> （现在是 `D:\deepseek`）。桌宠启动时按「环境变量 `DSH_HOME` → DSH NEXT 记录的目录 → `%USERPROFILE%\.dsh`」
+> 的顺序找数据根，所以整个 `.dsh` 搬到 D 盘后，桌宠仍会跟着走。
+> 把目录复制到别处后记得收紧权限：密钥文件（`standalone-ai.json`）如果带
+> `Authenticated Users` / `BUILTIN\Users` 这类宽权限，桌宠会拒绝读取并报
+> `Cannot securely load standalone AI settings.`，用
+> `icacls <文件> /inheritance:r /grant:r *<你的SID>:F` 收紧即可。
 
 ## 两种形态
 
 1. **DSH 没开**：独立桌宠照常运行，可以显示本地账本、余额（需在右键「打开 AI 设置」里配服务商）、提醒、番茄钟等。
 2. **DSH 开着**：DSH 里的 dsh-pet 插件启动后把本机入口写进
-   `~/.dsh/dsh-pet/standalone-bridge.json`；独立桌宠每秒读一次并连上。描述文件没有时（例如 DSH 侧还是旧插件、或
-   插件刚重启还没写文件），独立桌宠会去读 DSH 自己的日志（`~/.dsh/logs/desktop-next*.log` 尾部的
+   `<DSH 数据根>\dsh-pet\standalone-bridge.json`；独立桌宠每秒读一次并连上。描述文件没有时（例如 DSH 侧还是旧插件、或
+   插件刚重启还没写文件），独立桌宠会去读 DSH 自己的日志（`<DSH 数据根>\logs\desktop-next*.log` 尾部的
    `dsh web: http://127.0.0.1:<port>/?token=…`）兜底发现入口，所以**多数情况下不用重启 DSH 也能连上**。连上后：
    - 会话工作状态（thinking / working / waiting / result）、通知、语音、说话都来自 DSH；
    - 余额与额度以 DSH 侧为准（MiniMax 5h/周额度 + DeepSeek 账户余额 + 今日已用）；
@@ -36,7 +44,7 @@
 | 3 | `pricing` | 峰谷价目 | 当前是高峰还是空闲（谷价），距下次切换多久，Flash / Pro 命中、未命中、输出的单价（元/百万 token） |
 | — | `whisper` | 碎碎念 / 对话 | 可选步骤；只有最近有碎碎念文案时才出现，没内容自动跳过 |
 
-- 顺序、启用都可以在「设置页 → 气泡 → 点击编排」里改：每步有 ↑ ↓ 调顺序、× 从队列里删掉、勾选框临时跳过；删掉的步骤（包括预制的 summary/detail/pricing）可以从下方的「＋ 加入编排」再选回来（同一 kind 只保留一次），所以「自定义页」没进队列时到那里加一步就行。落库字段是 `bubbleClickSteps`（旧配置的 `bubbleClickPages` 两开关仍被兼容，缺队列时按它推出明细/峰谷两步）。
+- 顺序、启用都可以在「设置页 → 气泡 → 点击编排」里改：每步有 ↑ ↓ 调顺序、× 从队列里删掉、勾选框临时跳过、「编辑」按钮改这一页的内容；删掉的步骤（包括预制的 summary/detail/pricing）可以从下方的「＋ 加入编排」再选回来（同一 kind 只保留一次），「＋ 新建自定义页」则新建一份属于自己的页。落库字段是 `bubbleClickSteps`（旧配置的 `bubbleClickPages` 两开关仍被兼容，缺队列时按它推出明细/峰谷两步）。
 - 队列里同类步骤只保留第一次出现；全关时退回收起态一页，绝不会点了没反应。
 - 「峰谷价目」页只在同时有 DeepSeek 账户余额与窗口额度时出现（纯额度服务商没有 DeepSeek 价目可报）。
 - 与鲸鱼挂件编辑器的差异：暂不做「并列随机（多选项按权重抽一个）」，自定义内容支持文本行 + 占位符 + 颜色/字号/对齐（见下一节），不支持图片行；数据页（summary/detail/pricing）仍是固定内容。
@@ -44,16 +52,29 @@
 - 首次启动 / 刷新页面时余额叶子会被首拉基线吞掉，helper 与页面都会**静默预热**一次余额状态（不弹气泡、不播动画），所以刚启动就能点出编排；如果刚启动余额还没查回来（`ok` 未就绪），那一下只播点击动画，等 1–2 秒再点。
 - 价目数据与挂件同源：工作日 9:00–12:00、14:00–18:00（北京时间）是高峰，其余时段与周末、法定节假日为谷价；周末谷价自 2026-08-23 起、节假日谷价自 2026-09-19 起生效。
 
-## 自定义气泡页（占位符 / 颜色 / 字号 / 对齐）
+## 自定义气泡页（多份 + 每一页都能编辑）
 
-队列里还有一个 `custom` 步骤，对应「设置页 → 气泡 → 自定义页」卡片：
+队列里的**每一页**——预置的（`summary` / `detail` / `pricing` / `whisper`）和自己新建的——都可以在
+「设置页 → 气泡 → 点击编排」里逐行改内容、占位符、颜色、字号、对齐、粗体。
 
-- 每行一个文本模板，支持 `{token}` 占位符：`{balance}` `{tier}` `{todaySpend}` `{rolling}` `{rollingReset}` `{weekly}` `{weeklyReset}` `{peakStatus}` `{peakCountdown}` `{flashHit}` `{flashMiss}` `{flashOut}` `{proHit}` `{proMiss}` `{proOut}` `{whisper}` `{date}` `{time}`；未知 token 原样保留，缺数据显示 `--`。
-- 每行可单独设颜色（#rgb / #rrggbb）、字号（8–48 px）、对齐（左/中/右）、**粗体**，最多 6 行，可 ↑ ↓ 调行序、加一行、删一行。
-- 卡片顶部有实时预览（用样本余额数据渲染），改完点「保存气泡设置」落库到 `bubbleTemplate`；队列里加了 `custom` 步骤才会在点击时出现这一页。
-- 卡片里直接列出全部占位符（`{token}` + 中文含义），点一下就能插到**最近编辑过的那一行**的末尾（不是永远第一行）；预览随输入实时更新，**编辑时不会重建面板**，所以输入焦点和光标位置不会被打断。
-- exe 的安装位置当前是 `C:\Users\Lenovo\.dsh\dsh-pet-app\win-unpacked`，`E:\projects\dsh-pet\app` 仍是指向它的 junction（桌面快捷方式、开机自启都还指向 `app\dsh-pet.exe`）。
-- 模板为空（或没配 `custom` 步骤）时该页自动跳过，不会出现空白气泡。
+- **新建自定义页**：点「＋ 新建自定义页」，会生成一份带标题（如「自定义页 3」）与几行默认内容的页，
+  直接排在编排队列末尾；可以建任意多份，每份有独立的 id（`c1`、`c2`…）、标题与模板。
+- **编辑任意一页**：每一步右侧有「编辑」按钮，点开就是这一页的行编辑器——文本、占位符、颜色、字号、
+  对齐、粗体、↑ ↓ 调行序、加一行、删一行。预置页第一次编辑时会用占位符种子模板预填
+  （例如 `summary` 预填「余额 / 今日已用 / 周额度剩」），不想改了就点「恢复这一页的默认内容」。
+- **占位符**：`{balance}` `{tier}` `{todaySpend}` `{rolling}` `{rollingReset}` `{weekly}` `{weeklyReset}`
+  `{peakStatus}` `{peakCountdown}` `{flashHit}` `{flashMiss}` `{flashOut}` `{proHit}` `{proMiss}`
+  `{proOut}` `{whisper}` `{date}` `{time}`；未知 token 原样保留，缺数据显示 `--`。
+- 每行可单独设颜色（#rgb / #rrggbb）、字号（8–48 px）、对齐（左/中/右）、粗体，最多 6 行。
+- 编辑器上方有实时预览（用样本余额数据渲染），改完点「保存气泡设置」落库；
+  编辑时不会重建面板，所以输入焦点和光标不会被打断。
+- 卡片里直接列出全部占位符（`{token}` + 中文含义），点一下就插到**最近编辑过的那一行**末尾。
+- 一页的模板为空（或该页没配内容）时自动跳过，不会出现空白气泡。
+- 落库字段：编排队列是 `bubbleClickSteps`，每一页自己的内容就挂在该步的 `template` 上
+  （`id` 区分多份自定义页、`title` 是显示名）；旧的全局 `bubbleTemplate` 仍被兼容，
+  没有自带模板的 `custom` 步会回落到它。
+- exe 的安装位置当前是 `D:\deepseek\dsh-pet-app\win-unpacked`，`E:\projects\dsh-pet\app` 仍是指向它的
+  junction（桌面快捷方式、开机自启都还指向 `app\dsh-pet.exe`）。
 
 ## 气泡优先级：谁的泡泡先占屏
 
@@ -80,7 +101,7 @@
 | --- | --- | --- |
 | 对话 | 桌宠的聊天框 | — |
 | 桌宠 | 大小、位置、碎碎念、音色、提醒等 | 保存桌宠设置 |
-| 气泡 | 字体与字号、点击编排（第 2/3 页开关） | 保存气泡设置 |
+| 气泡 | 字体与字号、点击编排（顺序/启用/每一页的内容与样式） | 保存气泡设置 |
 | AI 服务 | 服务商、密钥、模型、余额查询、测试连接 | 保存 AI 设置 |
 
 以前这些都挤在同一个「配置」页里、底部只有一条「保存」，很容易点错；现在按分区拆开了。气泡相关（字体/字号/编排）原来藏在「桌宠」页里，现在单独成区。
@@ -108,8 +129,14 @@
 插件包目录被本地构建产物替换过，plugin_manager 判定为 `package-moved`，热加载不可用：
 
 1. 菜单里退出 DSH NEXT，重新打开；
-2. 确认 `~/.dsh/dsh-pet/standalone-bridge.json` 出现；
+2. 确认 `<DSH 数据根>\dsh-pet\standalone-bridge.json` 出现；
 3. 独立桌宠日志里出现「DSH 桥已连接」。
+
+另外，插件管理器写进 profile 的 `cordis.patch.yml` 里那条 `- { id: dsh-pet, disabled: false }`
+是本机手工加的（商城那条命令只会报 `application: overridden`，不会真正生效）；把整个 profile
+目录复制到别的盘时，这条会一起被复制过去，不用再改。
+
+即便没有这一步，DSH 开着时独立桌宠通常仍能连上——桥有「读 DSH 日志兜底发现入口」的机制。
 
 ## 已知限制
 
@@ -124,8 +151,15 @@
 cd E:/projects/dsh-pet/dsh-pet
 npm run build                 # tsdown + desktop-core + types
 export PATH=/e/projects/dsh-pet/.tools:$PATH   # electron-builder 需要 pnpm 命令
-node scripts/dist.mjs         # 产出 dist-app/win-unpacked
+export DSH_PET_OUTPUT_DIR="D:/deepseek/dsh-pet-app"   # 产物输出目录（可选）
+node scripts/dist.mjs         # 产出 <输出目录>/win-unpacked
 ```
+
+打包输出默认落在仓库里的 `dist-app\win-unpacked`；如果那台机器上有别的程序（如 IDE 索引）占着
+`E:\projects` 下的 `.asar`，用 `DSH_PET_OUTPUT_DIR` 换一个目录（例如 D 盘），再让
+`E:\projects\dsh-pet\app` junction 指过去即可，快捷方式不用改。
+打包前记得先退出正在运行的桌宠（`Get-Process dsh-pet | Stop-Process -Force`），否则 exe 被占用会报
+`EPERM: unlink … dsh-pet.exe`。
 
 改完重新打包后，退出托盘里的桌宠再双击快捷方式即可（junction 路径不变）。
 只想快速验证逻辑、不打包时，可以直接跑独立模式：
@@ -138,7 +172,7 @@ node lib/standalone.js        # 监听 3080，数据与 exe 版共用
 
 ## 排障
 
-- 日志：`~/.dsh/dsh-pet/logs.txt`
+- 日志：`<DSH 数据根>\dsh-pet\logs.txt`
 - 本地接口：exe 版端口随机（日志「本机服务 http://127.0.0.1:<port>」）；独立模式固定 `http://127.0.0.1:3080/dsh-pet-7340/state`
 - 心跳：`standalone-running.json` 每 30 秒刷新；PID 不存在或超过 90 秒未刷新即视为未运行
 - 若日志里出现 `dpi probe failed: … ETIMEDOUT`（20 秒卡顿），说明 DPI 探测子进程没起来：清掉环境里的
@@ -150,5 +184,5 @@ node lib/standalone.js        # 监听 3080，数据与 exe 版共用
 桌面版每次启动都会监听一个本机端口，设置页地址里带着这个端口。**重启桌宠后，之前打开的设置页会指向旧端口**，此时点「保存」「拉取模型」都会报浏览器级的 `Failed to fetch`。
 
 - 处理：右键桌宠 →「打开 AI 设置」重新打开页面，再粘贴密钥、拉取模型。
-- 现在启动时会优先复用上次的端口（记录在 `~/.dsh/dsh-pet/app-port.json`），只要端口没被别的程序占走，重启后旧页面也能继续用。
+- 现在启动时会优先复用上次的端口（记录在 `<DSH 数据根>\dsh-pet\app-port.json`），只要端口没被别的程序占走，重启后旧页面也能继续用。
 - 页面侧也已把这类网络错误提示成「连不上本机服务了：请从桌宠托盘菜单重新打开『打开 AI 设置』」。

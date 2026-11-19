@@ -13,9 +13,9 @@ function globalCards() {
   return [globalFlagsCard, voiceCard, physicsCard, motionCard, modelCard, memoryCard, environmentCard, advancedCard];
 }
 
-/** 「气泡」分区：外观字号 + 点击编排。两者都写 main 条目的全局字段，各有自己的保存按钮。 */
+/** 「气泡」分区：外观字号 + 点击编排（每一页的内容就在队列里点「编辑」改）。 */
 function bubbleCards() {
-  return [fontCard, bubbleClickCard, bubbleTemplateCard];
+  return [fontCard, bubbleClickCard];
 }
 
 /** 编排步骤目录：顺序即点击顺序；whisper 没有内容时消费端会跳过。 */
@@ -25,7 +25,7 @@ function bubbleStepDefs() {
     { kind: 'detail', label: '窗口明细', hint: '5h 与周额度各自还剩多少、什么时候重置；服务商给了区间用量时跟在它后面。' },
     { kind: 'pricing', label: '峰谷价目', hint: 'DeepSeek 单价（命中/未命中/输出）与距下次峰谷切换的倒计时；只有同时有账户余额与窗口额度时才有内容。' },
     { kind: 'whisper', label: '碎碎念 / 对话', hint: '最近一条碎碎念或对话气泡；没有内容时这一步自动跳过。' },
-    { kind: 'custom', label: '自定义页', hint: '按「自定义页」卡片里配的文本/颜色/字号渲染；没配置内容时自动跳过。' },
+    { kind: 'custom', label: '自定义页', hint: '自己写的一页：内容在它自己的「编辑」里配；可以建多份，每份各配各的。' },
   ];
 }
 
@@ -39,6 +39,51 @@ function bubbleStepHint(kind) {
   const defs = bubbleStepDefs();
   for (let i = 0; i < defs.length; i += 1) if (defs[i].kind === kind) return defs[i].hint;
   return '';
+}
+
+/**
+ * 打开/收起某一步的编辑面板（同一时刻只展开一步）。
+ *
+ * 预置页第一次编辑时预填一份占位符种子——用户点开就能看见这一页能写什么，
+ * 再逐行改成自己的内容；自定义页没有模板时给一份默认行。
+ */
+function toggleBubbleStepEdit(index) {
+  var steps = state.globals.bubbleClickSteps || [];
+  var step = steps[index];
+  if (!step) return;
+  if (state.bubbleEditStep === index) {
+    state.bubbleEditStep = null;
+    renderBubblePanel();
+    return;
+  }
+  if (!Array.isArray(step.template) || step.template.length === 0) {
+    var seed = step.kind === 'custom' ? BUBBLE_CUSTOM_DEFAULT_ROWS : BUBBLE_STEP_SEEDS[step.kind];
+    if (seed && seed.length) step.template = copyBubbleRows(seed);
+  }
+  state.bubbleEditStep = index;
+  markDirty(true);
+  renderBubblePanel();
+}
+
+/** 新建一份自定义页：生成不重复的 id + 默认行，并直接进入编辑。 */
+function addCustomBubblePage() {
+  var steps = state.globals.bubbleClickSteps || [];
+  var used = {};
+  for (var i = 0; i < steps.length; i += 1) {
+    if (steps[i] && typeof steps[i].id === 'string') used[steps[i].id] = true;
+  }
+  var n = 1;
+  while (used['c' + n]) n += 1;
+  var step = {
+    kind: 'custom',
+    id: 'c' + n,
+    title: '自定义页 ' + n,
+    template: copyBubbleRows(BUBBLE_CUSTOM_DEFAULT_ROWS),
+  };
+  state.globals.bubbleClickSteps = steps.concat([step]);
+  state.bubbleEditStep = steps.length;
+  markDirty(true);
+  renderBubblePanel();
 }
 
 /** 上移/下移一步：顺序就是点击顺序，改完立即重渲染（保存仍走下方按钮）。 */
@@ -86,14 +131,17 @@ function addBubbleStep(kind) {
 /** 「加入编排」：列出还没在队列里的步骤。 */
 function bubbleStepAddRow() {
   const steps = state.globals.bubbleClickSteps || [];
-  const defs = bubbleStepDefs();
+  // 自定义页不在下拉里：它可以建多份，走下面的「＋ 新建自定义页」按钮。
+  const defs = bubbleStepDefs().filter(function (def) {
+    return def.kind !== 'custom';
+  });
   const missing = defs.filter(function (def) {
     for (let i = 0; i < steps.length; i += 1) if (steps[i].kind === def.kind) return false;
     return true;
   });
   const wrap = make('div', { class: 'bubbleStepAdd' });
   if (missing.length === 0) {
-    wrap.appendChild(make('p', { class: 'fieldHint', text: '五种步骤都已经在编排里了；要调整顺序用 ↑ ↓，不想弹某一步就取消勾选。' }));
+    wrap.appendChild(make('p', { class: 'fieldHint', text: '预置步骤都已经在编排里了；要调整顺序用 ↑ ↓，不想弹某一步就取消勾选。自定义页可以另建多份。' }));
     return wrap;
   }
   const select = make('select', { class: 'bubbleStepAddSelect' });
@@ -132,12 +180,18 @@ function bubbleStepRow(step, index, total) {
   remove.addEventListener('click', function () {
     removeBubbleStep(index);
   });
+  const edit = make('button', { type: 'button', class: 'btn ghost', text: state.bubbleEditStep === index ? '收起' : '编辑' });
+  edit.title = '编辑这一页的内容：文字、{占位符}、颜色、字号、对齐';
+  edit.addEventListener('click', function () {
+    toggleBubbleStepEdit(index);
+  });
   return make('div', { class: 'rowCheck bubbleStep' }, [
     box,
     make('span', { class: 'rowCheckText' }, [
-      make('span', { class: 'rowCheckTitle', text: (index + 1) + '. ' + bubbleStepLabel(step.kind) }),
+      make('span', { class: 'rowCheckTitle', text: (index + 1) + '. ' + bubbleStepTitle(step, index) }),
       make('span', { class: 'rowCheckHint', text: bubbleStepHint(step.kind) }),
     ]),
+    edit,
     up,
     down,
     remove,
@@ -146,15 +200,23 @@ function bubbleStepRow(step, index, total) {
 
 function bubbleClickCard() {
   const steps = state.globals.bubbleClickSteps || [];
-  const rows = steps.map(function (step, index) {
-    return bubbleStepRow(step, index, steps.length);
+  const blocks = [];
+  for (let i = 0; i < steps.length; i += 1) {
+    blocks.push(bubbleStepRow(steps[i], i, steps.length));
+    // 展开中的那一步在它下面直接编辑内容，不用再翻别的卡片。
+    if (state.bubbleEditStep === i) blocks.push(bubbleStepEditor(i));
+  }
+  const custom = make('button', { type: 'button', class: 'btn ghost', text: '＋ 新建自定义页' });
+  custom.title = '新建一份自己的页：内容、颜色、字号都在它自己的「编辑」里配';
+  custom.addEventListener('click', function () {
+    addCustomBubblePage();
   });
   return card(
     '点击编排',
-    '点一下宠物本体，按下面顺序一页页弹；再点推进，末页再点收起（10 秒不动也会自己收）。用 ↑ ↓ 调顺序、× 删掉某一步（下方可再加入），取消勾选只是临时跳过。',
+    '点一下宠物本体，按下面顺序一页页弹；再点推进，末页再点收起（10 秒不动也会自己收）。用 ↑ ↓ 调顺序、× 删掉某一步（下方可再加入），取消勾选只是临时跳过。每一页都能点「编辑」改内容：预置页可以换成自己的文字，自定义页可以建多份、每份各配各的。',
     [
-      make('p', { class: 'fieldHint', text: '共 ' + steps.length + ' 步（至少保留一步）；「自定义页」要先在下面卡片里配好内容才会出现。' }),
-    ].concat(rows).concat([bubbleStepAddRow()]),
+      make('p', { class: 'fieldHint', text: '共 ' + steps.length + ' 步（至少保留一步）；自定义页点「＋ 新建自定义页」创建，内容在它自己的「编辑」里配。' }),
+    ].concat(blocks).concat([bubbleStepAddRow(), custom]),
   );
 }
 

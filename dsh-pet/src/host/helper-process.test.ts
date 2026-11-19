@@ -23,6 +23,7 @@ import {
   crashLoopAdvice,
   describeExit,
   dshHomeDir,
+  dshNextHomeDir,
   defaultElectronExe,
   ensureElectronDownload,
   hasGraphicalDisplay,
@@ -84,9 +85,89 @@ describe('dshHomeDir —— $DSH_HOME 解析', () => {
   test('未设 DSH_HOME 时回落到 ~/.dsh', () => {
     withIsolatedHome(() => {
       delete process.env.DSH_HOME;
-      const userProfile = process.env.USERPROFILE || process.env.HOME || '';
-      assert.equal(dshHomeDir(), join(userProfile, '.dsh'));
+      // 这台机器上 %APPDATA% 里真的有 DSH NEXT 的位置记录，会把 home 指到别处；
+      // 这里指向空目录，单独验证「没有记录时的回落」。
+      const savedAppData = process.env.APPDATA;
+      process.env.APPDATA = join(tmpdir(), 'dsh-pet-empty-appdata');
+      try {
+        const userProfile = process.env.USERPROFILE || process.env.HOME || '';
+        assert.equal(dshHomeDir(), join(userProfile, '.dsh'));
+      } finally {
+        if (savedAppData === undefined) delete process.env.APPDATA;
+        else process.env.APPDATA = savedAppData;
+      }
     });
+  });
+
+  test('没有 DSH_HOME 时跟随 DSH NEXT 记录的数据目录', () => {
+    withIsolatedHome(() => {
+      delete process.env.DSH_HOME;
+      const savedAppData = process.env.APPDATA;
+      const dir = mkdtempSync(join(tmpdir(), 'dsh-pet-appdata-'));
+      const home = join(dir, 'deepseek');
+      mkdirSync(join(dir, 'DSH NEXT', 'home'), { recursive: true });
+      mkdirSync(home, { recursive: true });
+      writeFileSync(
+        join(dir, 'DSH NEXT', 'home', 'desktop-next-location.json'),
+        JSON.stringify({ home }),
+        'utf8',
+      );
+      process.env.APPDATA = dir;
+      try {
+        assert.equal(dshHomeDir(), home);
+      } finally {
+        if (savedAppData === undefined) delete process.env.APPDATA;
+        else process.env.APPDATA = savedAppData;
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+});
+
+describe('dshNextHomeDir —— DSH NEXT 记录的数据目录', () => {
+  test('读 desktop-next-location.json 里的 home', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-pet-next-'));
+    const home = join(dir, 'deepseek');
+    mkdirSync(home, { recursive: true });
+    try {
+      const found = dshNextHomeDir('C:\\AppData', (path) =>
+        path.endsWith('desktop-next-location.json') ? JSON.stringify({ home }) : undefined,
+      );
+      assert.equal(found, home);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('location 缺失时回落到 last-home', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-pet-next-'));
+    const home = join(dir, 'old');
+    mkdirSync(home, { recursive: true });
+    try {
+      const found = dshNextHomeDir('C:\\AppData', (path) =>
+        path.endsWith('desktop-next-last-home.json') ? JSON.stringify({ home }) : undefined,
+      );
+      assert.equal(found, home);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('没有记录时返回 undefined', () => {
+    assert.equal(dshNextHomeDir('C:\\AppData', () => undefined), undefined);
+  });
+
+  test('坏掉的 JSON 不应让解析崩掉', () => {
+    assert.equal(dshNextHomeDir('C:\\AppData', () => '{not json'), undefined);
+  });
+
+  test('记录的目录已经不存在时忽略它', () => {
+    const found = dshNextHomeDir('C:\\AppData', (path) =>
+      path.endsWith('desktop-next-location.json')
+        ? JSON.stringify({ home: join(tmpdir(), 'dsh-pet-not-here-at-all') })
+        : undefined,
+    );
+    assert.equal(found, undefined);
   });
 });
 

@@ -72,3 +72,39 @@ test('纯窗口服务商没有峰谷页；关掉明细时用量页一起去掉',
   assert.deepEqual(clickPageKinds(withUsage), ['summary', 'detail', 'usage', 'pricing']);
   assert.deepEqual(clickPageKinds(withUsage, DEFAULT_BUBBLE_CLICK_STEPS, { detail: false }), ['summary', 'pricing']);
 });
+
+test('多份自定义页：各带各的模板，按队列顺序依次弹出', () => {
+  const steps = [
+    { kind: 'custom', id: 'c1', title: '余额速览', template: [{ text: '余额 {balance}', size: 16 }] },
+    { kind: 'custom', id: 'c2', title: '额度速览', template: [{ text: '周剩余 {weekly}', size: 12 }] },
+    { kind: 'summary' },
+  ] as const;
+  assert.deepEqual(clickPageKinds(combined, steps), ['custom', 'custom', 'summary']);
+  assert.equal(clickPageCount(combined, steps), 3);
+  const first = clickPageView(combined, 0, steps);
+  assert.match(first[0].text, /余额/);
+  const second = clickPageView(combined, 1, steps);
+  assert.match(second[0].text, /周剩余/);
+  assert.equal(second[0].style?.size, 12);
+});
+
+test('编辑过的预置页用自己的模板；没编辑的仍走内置内容', () => {
+  const edited = [{ kind: 'summary', template: [{ text: '只剩 {balance}' }] }, { kind: 'detail' }] as const;
+  assert.deepEqual(clickPageKinds(combined, edited), ['summary', 'detail']);
+  const rows = clickPageView(combined, 0, edited);
+  assert.equal(rows.length, 1);
+  assert.match(rows[0].text, /只剩/);
+  // 明细页自带模板时不再拆出「用量」页——那一页已经是用户自己定义的样子。
+  const withUsage = { ...combined, usage: { inputTokens: 1, outputTokens: 2 } } as unknown as BalanceState;
+  const detailOwn = [{ kind: 'detail', template: [{ text: '5h {rolling}' }] }] as const;
+  assert.deepEqual(clickPageKinds(withUsage, detailOwn), ['detail']);
+  assert.equal(clickPageCount(withUsage, detailOwn), 1);
+});
+
+test('自定义页没有内容就不出现（旧配置里的全局模板仍可回落）', () => {
+  const empty = [{ kind: 'custom', id: 'c1' }, { kind: 'summary' }] as const;
+  assert.deepEqual(clickPageKinds(combined, empty), ['summary']);
+  const legacy = [{ kind: 'custom', id: 'c1' }, { kind: 'summary' }] as const;
+  const rows = clickPageView(combined, 0, legacy, {}, null, [{ text: '余额 {balance}' }]);
+  assert.match(rows[0].text, /余额/);
+});

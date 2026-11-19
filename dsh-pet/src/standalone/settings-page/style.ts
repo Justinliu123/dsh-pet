@@ -180,6 +180,10 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .bubbleRowEditor .bubbleSize{flex:0 0 58px}
 .bubbleRowEditor .bubbleAlign{flex:0 0 66px}
 .bubbleRowEditor .btn.ghost{flex:none;min-width:28px;padding:0 6px}
+.bubbleStepEditor{margin:8px 0 12px 28px;padding:10px 12px;border:1px solid var(--dsw-alias-border-l1);border-radius:10px;background:var(--dsw-alias-bg-l2, rgba(255,255,255,.04))}
+.bubbleStepEditorTitle{margin:0 0 8px;font-weight:600}
+.bubbleStepTitleRow{margin-bottom:8px}
+.bubbleStepTitleRow .wideInput{width:100%}
 .empty{padding:16px 0;font-size:13px;color:var(--dsw-alias-label-tertiary)}
 @media(max-width:767px){
   .shell{grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr)}

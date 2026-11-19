@@ -57,7 +57,7 @@ const FALLBACK_FONT = ${JSON.stringify(consts.font)};
 const FALLBACK_WEIGHTS = ${JSON.stringify(consts.weights)};
 const POWERCONTEXT_ID = ${JSON.stringify(consts.powerContextProviderId)};
 const FALLBACK_INTERVAL_SEC = 300;
-const state = { config: null, meta: null, globals: null, pets: {}, prompts: {}, entry: 'main', petIndex: 0, dirty: false, voiceOptions: null, speechProviders: null, memoryProviders: null };
+const state = { config: null, meta: null, globals: null, pets: {}, prompts: {}, entry: 'main', petIndex: 0, dirty: false, voiceOptions: null, speechProviders: null, memoryProviders: null, bubbleEditStep: null };
 
 function byId(id) {
   return document.getElementById(id);

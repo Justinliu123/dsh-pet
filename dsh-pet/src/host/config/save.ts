@@ -240,8 +240,26 @@ export function saveUserConfig(
   }
   if (bcs !== undefined) {
     outConfig.bubbleClickSteps = (bcs as Array<Record<string, unknown>>).map((step) => {
-      const row: { kind: string; enabled?: boolean } = { kind: String(step.kind) };
+      // 落盘保留 kind/enabled 之外的自定义页标识、标题与这一页自己的模板——
+      // 多份自定义页与「编辑预置页」都靠这三样落库。
+      const row: { kind: string; enabled?: boolean; id?: string; title?: string; template?: unknown } = {
+        kind: String(step.kind),
+      };
       if (typeof step.enabled === 'boolean') row.enabled = step.enabled;
+      if (typeof step.id === 'string' && step.id.trim() !== '') row.id = step.id.trim();
+      if (typeof step.title === 'string' && step.title.trim() !== '') row.title = step.title.trim();
+      if (Array.isArray(step.template)) {
+        row.template = (step.template as Array<Record<string, unknown>>).map((item) => {
+          const clean: { text: string; color?: string; size?: number; align?: string; bold?: boolean } = {
+            text: String(item.text),
+          };
+          if (typeof item.color === 'string') clean.color = item.color.toLowerCase();
+          if (typeof item.size === 'number') clean.size = Math.round(item.size);
+          if (typeof item.align === 'string') clean.align = item.align;
+          if (typeof item.bold === 'boolean') clean.bold = item.bold;
+          return clean;
+        });
+      }
       return row;
     });
   }

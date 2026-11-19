@@ -105,10 +105,55 @@ export function hasGraphicalDisplay(): boolean {
   return Boolean(process.env.DISPLAY || process.env.WAYLAND_DISPLAY);
 }
 
-/** $DSH_HOME（默认 ~/.dsh）；测试与独立模式共用这一处推导。 */
+/**
+ * DSH NEXT 桌面端把自己的 home 记在 %APPDATA%/DSH NEXT/home/ 下。
+ *
+ * 换过数据目录后这两个文件会跟着更新（location=当前，last-home=上一个）；
+ * 独立桌宠据此找到与 DSH 同一个数据根，否则它会继续用 ~/.dsh 里的旧副本，
+ * 表现为「配置保存了但不生效」「桥连不上」「余额显示 custom」。
+ */
+const DSH_NEXT_HOME_FILES = ['desktop-next-location.json', 'desktop-next-last-home.json'];
+
+/**
+ * 读 DSH NEXT 记录的数据目录。
+ * @param appData - %APPDATA%；缺省取进程环境。
+ * @param readFile - 读文件回调；缺省用 fs.readFileSync（测试里可注入假实现）。
+ * @returns DSH NEXT 当前（或上一次）使用的数据目录；没有记录时返回 undefined。
+ */
+export function dshNextHomeDir(
+  appData: string | undefined = process.env.APPDATA,
+  readFile: (path: string) => string | undefined = (path) => {
+    try {
+      return readFileSync(path, 'utf8');
+    } catch {
+      return undefined;
+    }
+  },
+): string | undefined {
+  if (!appData) return undefined;
+  for (const file of DSH_NEXT_HOME_FILES) {
+    const raw = readFile(join(appData, 'DSH NEXT', 'home', file));
+    if (raw === undefined) continue;
+    try {
+      const parsed = JSON.parse(raw) as { home?: unknown };
+      const home = typeof parsed.home === 'string' ? parsed.home.trim() : '';
+      // 目录必须真的存在才算数：DSH NEXT 换目录前会先写 last-home，旧路径可能已不存在。
+      if (home !== '' && existsSync(home)) return home;
+    } catch {
+      // 坏掉的 JSON 直接跳过，试下一个候选。
+    }
+  }
+  return undefined;
+}
+
+/** $DSH_HOME（DSH NEXT 记录的 home → ~/.dsh）；测试与独立模式共用这一处推导。 */
 export function dshHomeDir(): string {
+  const fromEnv = process.env.DSH_HOME;
+  if (fromEnv) return fromEnv;
+  const next = dshNextHomeDir();
+  if (next) return next;
   const userProfile = process.env.USERPROFILE || process.env.HOME || '';
-  return process.env.DSH_HOME || join(userProfile, '.dsh');
+  return join(userProfile, '.dsh');
 }
 
 // Electron 官方发布包按平台/架构不同：win32 解压出 electron.exe + 散文件，darwin 是 Electron.app

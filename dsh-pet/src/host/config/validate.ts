@@ -168,24 +168,46 @@ export function bubbleTemplateValid(value: unknown): boolean {
     if (row === null || typeof row !== 'object' || Array.isArray(row)) return false;
     const item = row as Record<string, unknown>;
     if (typeof item.text !== 'string' || item.text.length === 0 || item.text.length > 120) return false;
-    if (item.color !== undefined && (typeof item.color !== 'string' || !BUBBLE_ROW_COLORS.test(item.color))) return false;
+    if (item.color !== undefined && (typeof item.color !== 'string' || !BUBBLE_ROW_COLORS.test(item.color)))
+      return false;
     if (item.size !== undefined) {
       if (typeof item.size !== 'number' || !Number.isFinite(item.size) || item.size < 8 || item.size > 48) return false;
     }
-    if (item.align !== undefined && !BUBBLE_ROW_ALIGNS.includes(item.align as (typeof BUBBLE_ROW_ALIGNS)[number])) return false;
+    if (item.align !== undefined && !BUBBLE_ROW_ALIGNS.includes(item.align as (typeof BUBBLE_ROW_ALIGNS)[number]))
+      return false;
+    if (item.bold !== undefined && typeof item.bold !== 'boolean') return false;
+  }
+  return true;
+}
+
+/** 队列里一步自带的行模板校验：最多 6 行，每行文本/颜色/字号/对齐都要合法。 */
+export function bubbleRowsValid(value: unknown): boolean {
+  if (!Array.isArray(value) || value.length > 6) return false;
+  for (const row of value) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return false;
+    const item = row as Record<string, unknown>;
+    if (typeof item.text !== 'string' || item.text.length === 0 || item.text.length > 120) return false;
+    if (item.color !== undefined && (typeof item.color !== 'string' || !BUBBLE_ROW_COLORS.test(item.color))) return false;
+    if (item.size !== undefined && (typeof item.size !== 'number' || !Number.isFinite(item.size) || item.size < 8 || item.size > 48)) return false;
+    if (item.align !== undefined && (typeof item.align !== 'string' || !BUBBLE_ROW_ALIGNS.includes(item.align as 'left' | 'center' | 'right'))) return false;
     if (item.bold !== undefined && typeof item.bold !== 'boolean') return false;
   }
   return true;
 }
 
 export function bubbleClickStepsValid(value: unknown): boolean {
-  if (!Array.isArray(value) || value.length === 0 || value.length > 8) return false;
+  if (!Array.isArray(value) || value.length === 0 || value.length > 12) return false;
   for (const step of value) {
     if (!step || typeof step !== 'object' || Array.isArray(step)) return false;
     const row = step as Record<string, unknown>;
     if (typeof row.kind !== 'string') return false;
     if (!(BUBBLE_STEP_KINDS as readonly string[]).includes(row.kind)) return false;
     if (row.enabled !== undefined && typeof row.enabled !== 'boolean') return false;
+    // 自定义页的标识：同一队列里多份自定义页靠它区分。
+    if (row.id !== undefined && (typeof row.id !== 'string' || !/^[A-Za-z0-9_-]{1,40}$/.test(row.id))) return false;
+    if (row.title !== undefined && (typeof row.title !== 'string' || row.title.length > 40)) return false;
+    // 这一页自己的内容模板：填了就等于编辑过了这一页。
+    if (row.template !== undefined && !bubbleRowsValid(row.template)) return false;
   }
   return true;
 }

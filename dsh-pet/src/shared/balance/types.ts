@@ -283,4 +283,13 @@ export interface BubbleClickStep {
   readonly kind: BubblePageKind;
   /** 缺键按启用。 */
   readonly enabled?: boolean;
+  /** 自定义页的标识：同一队列里可以放多份自定义页，靠它区分（预置页用不到）。 */
+  readonly id?: string;
+  /** 这一步在设置页里显示的名字（缺省按 kind 给中文名）。 */
+  readonly title?: string;
+  /**
+   * 这一页自己的行模板：填了就等于「编辑过了这一页」——
+   * 预置页带模板会用模板改写它的内容，自定义页必须带模板（没有内容就不显示这一步）。
+   */
+  readonly template?: readonly BubbleRowTemplate[];
 }
