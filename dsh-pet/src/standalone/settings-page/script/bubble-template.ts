@@ -33,13 +33,24 @@ var DEFAULT_ROW_COLOR = ${JSON.stringify(options.defaultColor)};
 var BUBBLE_CUSTOM_DEFAULT_ROWS = ${JSON.stringify(options.defaultRows)};
 var BUBBLE_STEP_SEEDS = ${JSON.stringify(options.stepSeeds)};
 var BUBBLE_ROW_ALIGNS = ['left', 'center', 'right'];
+/** 上一次查到的各预置页真实渲染结果（来自 /standalone-ai/balance 的 previews）。 */
+var BUBBLE_LIVE_PREVIEWS = null;
+/** 正在查余额；同一时刻只发一次请求。 */
+var bubbleLivePreviewLoading = false;
 /** 最近一次聚焦的模板行输入框：点占位符时优先插到这一行（点 chip 会先抢走焦点）。 */
 var bubbleLastRowInput = null;
+/** 上一次查到的真实占位符上下文（来自 /standalone-ai/balance 的 context）；没有就用样本。 */
+var BUBBLE_LIVE_CONTEXT = null;
+
+/** 预览填充用的上下文：真实数据优先，查不到才用样本值。 */
+function bubblePreviewContext() {
+  return BUBBLE_LIVE_CONTEXT || SAMPLE_BUBBLE_CONTEXT;
+}
 
 /** 与 shared 的 fillBubbleTemplate 同规则：不认识的占位符原样保留。 */
 function fillBubbleTemplateText(text) {
   return String(text).replace(/\\{([a-zA-Z]+)\\}/g, function (whole, token) {
-    var value = SAMPLE_BUBBLE_CONTEXT[token];
+    var value = bubblePreviewContext()[token];
     return value === undefined ? whole : value;
   });
 }
@@ -124,19 +135,81 @@ function moveBubbleStepRow(index, rowIndex, delta) {
 }
 
 /** 预览：与气泡同一套替换规则与内联样式，让用户不点宠物也能看到效果。 */
+/** 档位字（峰/谷）在预览里也着色，和气泡上的观感对齐。 */
+function bubblePreviewTierColor(tier) {
+  return tier === 'peak' ? '#e5645f' : '#3aa76d';
+}
+
+/** 给一行预览套上模板里的颜色/字号/对齐/加粗。 */
+function styleBubblePreviewLine(line, row) {
+  if (row.color) line.style.color = row.color;
+  if (typeof row.size === 'number') line.style.fontSize = row.size + 'px';
+  if (row.align) line.style.textAlign = row.align;
+  if (row.bold === true) line.style.fontWeight = '700';
+}
+
+/**
+ * 这一页预览里要显示什么。
+ *
+ * 优先用「真实余额算出来的行」（BUBBLE_LIVE_PREVIEWS，来自 /standalone-ai/balance 的 previews），
+ * 这样账户金额形态下不会凭空多出「周额度剩」；用户给这一页配了自己的模板才用模板，
+ * 两者都没有时才回落到种子模板 + 样本上下文。
+ */
+function bubbleStepPreviewRows(index) {
+  var step = bubbleStepAt(index);
+  if (!step) return { source: 'empty', rows: [] };
+  var own = bubbleStepRows(index);
+  if (own.length > 0) return { source: 'template', rows: own };
+  var live = BUBBLE_LIVE_PREVIEWS && BUBBLE_LIVE_PREVIEWS[step.kind];
+  if (live && live.length > 0) return { source: 'live', rows: live };
+  var seed = BUBBLE_STEP_SEEDS[step.kind];
+  if (seed && seed.length > 0) return { source: 'seed', rows: copyBubbleRows(seed) };
+  return { source: 'empty', rows: [] };
+}
+
+/** 把预览内容画进容器（模板行一行一条；真实行把「余额（谷）¥x」这类片段拼回一行）。 */
+function paintBubbleStepPreview(box, index) {
+  box.textContent = '';
+  var picked = bubbleStepPreviewRows(index);
+  if (picked.rows.length === 0) {
+    box.appendChild(make('div', { class: 'bubblePreviewLine', text: '（这一页现在没有内容）' }));
+    return;
+  }
+  if (picked.source !== 'live') {
+    for (var i = 0; i < picked.rows.length; i += 1) {
+      var row = picked.rows[i];
+      var line = make('div', { class: 'bubblePreviewLine', text: fillBubbleTemplateText(row.text) });
+      styleBubblePreviewLine(line, row);
+      box.appendChild(line);
+    }
+    return;
+  }
+  // 真实行：role=label / tier 连续拼成一行，sub / error 另起一行——和气泡里的排版一致。
+  var current = null;
+  for (var j = 0; j < picked.rows.length; j += 1) {
+    var item = picked.rows[j];
+    if (item.role === 'sub' || item.role === 'error') {
+      current = null;
+      var sub = make('div', { class: 'bubblePreviewLine', text: item.text });
+      styleBubblePreviewLine(sub, item);
+      box.appendChild(sub);
+      continue;
+    }
+    if (current === null) {
+      current = make('div', { class: 'bubblePreviewLine' });
+      box.appendChild(current);
+    }
+    var span = make('span', { text: item.text });
+    if (item.role === 'tier') span.style.color = bubblePreviewTierColor(item.tier);
+    styleBubblePreviewLine(span, item);
+    current.appendChild(span);
+  }
+}
+
 function bubbleStepPreview(index) {
-  var rows = bubbleStepRows(index);
   var box = make('div', { class: 'bubblePreview' });
   box.setAttribute('data-bubble-preview', String(index));
-  for (var i = 0; i < rows.length; i += 1) {
-    var row = rows[i];
-    var line = make('div', { class: 'bubblePreviewLine', text: fillBubbleTemplateText(row.text) });
-    if (row.color) line.style.color = row.color;
-    if (typeof row.size === 'number') line.style.fontSize = row.size + 'px';
-    if (row.align) line.style.textAlign = row.align;
-    if (row.bold === true) line.style.fontWeight = '700';
-    box.appendChild(line);
-  }
+  paintBubbleStepPreview(box, index);
   return box;
 }
 
@@ -146,17 +219,53 @@ function bubbleStepPreview(index) {
 function refreshBubbleStepPreview(index) {
   var box = document.querySelector('[data-bubble-preview="' + index + '"]');
   if (!box) return;
-  box.textContent = '';
-  var rows = bubbleStepRows(index);
-  for (var i = 0; i < rows.length; i += 1) {
-    var row = rows[i];
-    var line = make('div', { class: 'bubblePreviewLine', text: fillBubbleTemplateText(row.text) });
-    if (row.color) line.style.color = row.color;
-    if (typeof row.size === 'number') line.style.fontSize = row.size + 'px';
-    if (row.align) line.style.textAlign = row.align;
-    if (row.bold === true) line.style.fontWeight = '700';
-    box.appendChild(line);
+  paintBubbleStepPreview(box, index);
+}
+
+/** 所有已展开的编辑器都按最新余额重画一遍预览（面板重建之后、或查到余额之后调用）。 */
+function refreshAllBubbleStepPreviews() {
+  var boxes = document.querySelectorAll('[data-bubble-preview]');
+  for (var i = 0; i < boxes.length; i += 1) {
+    var index = Number(boxes[i].getAttribute('data-bubble-preview'));
+    if (!isNaN(index)) paintBubbleStepPreview(boxes[i], index);
   }
+}
+
+/** 记下真实余额算出来的预览，并把已展开的编辑器刷新一遍。 */
+function setBubbleLivePreviews(previews, context) {
+  BUBBLE_LIVE_PREVIEWS = previews && typeof previews === 'object' ? previews : null;
+  BUBBLE_LIVE_CONTEXT = context && typeof context === 'object' ? context : null;
+  refreshAllBubbleStepPreviews();
+}
+
+/**
+ * 拉一次真实余额，让预览和桌宠对齐。
+ *
+ * 只是锦上添花：查不到（没配服务商、网络失败、旧接口没有 previews）就保留模板预览，
+ * 绝不能因此打断设置页的其他功能。
+ */
+function loadBubbleLivePreviews() {
+  if (bubbleLivePreviewLoading) return;
+  bubbleLivePreviewLoading = true;
+  fetch('/standalone-ai/balance', {
+    method: 'POST',
+    credentials: 'same-origin',
+    cache: 'no-store',
+    headers: { 'X-DSH-Pet-Token': TOKEN },
+  })
+    .then(function (response) {
+      if (!response.ok) throw new Error('HTTP ' + response.status);
+      return response.json();
+    })
+    .then(function (data) {
+      if (data && (data.previews || data.context)) setBubbleLivePreviews(data.previews, data.context);
+    })
+    .catch(function () {
+      // 静默：预览退回模板口径。
+    })
+    .then(function () {
+      bubbleLivePreviewLoading = false;
+    });
 }
 
 /** 占位符说明：页面上直接列出全部 token 与含义（不用去翻文档，也不用猜下拉框）。 */
@@ -286,6 +395,22 @@ function bubbleStepRowEditor(index, row, rowIndex, total) {
 }
 
 /** 某一步的编辑面板：预览 + 占位符说明 + 逐行编辑 + 加一行。 */
+/**
+ * 把预置页的默认内容灌进这一页自己的模板（用户点「从默认内容开始改」时才做）。
+ *
+ * 不在打开编辑器时就自动灌：那样一按保存，预置页就从「内置渲染」变成「模板渲染」，
+ * 与实时预览/实际气泡的细节就会悄悄漂移。
+ */
+function seedBubbleStepContent(index) {
+  var step = bubbleStepAt(index);
+  if (!step) return;
+  var seed = step.kind === 'custom' ? BUBBLE_CUSTOM_DEFAULT_ROWS : BUBBLE_STEP_SEEDS[step.kind];
+  if (!seed || seed.length === 0) return;
+  step.template = copyBubbleRows(seed);
+  markDirty(true);
+  renderBubblePanel();
+}
+
 function bubbleStepEditor(index) {
   var step = bubbleStepAt(index);
   var wrap = make('div', { class: 'bubbleStepEditor' });
@@ -303,6 +428,15 @@ function bubbleStepEditor(index) {
 
   var rows = bubbleStepRows(index);
   wrap.appendChild(make('div', { class: 'bubblePreviewWrap' }, [bubbleStepPreview(index)]));
+  if (step.kind !== 'custom' && rows.length === 0) {
+    // 预置页还没被改过：预览就是桌宠上的真实内容；要改成自己的文字再点这里。
+    var seedBtn = make('button', { type: 'button', class: 'btn ghost', text: '从默认内容开始改' });
+    seedBtn.title = '把这一页当前的内容作为起点写进它自己的模板，之后就能逐行改';
+    seedBtn.addEventListener('click', function () {
+      seedBubbleStepContent(index);
+    });
+    wrap.appendChild(seedBtn);
+  }
   wrap.appendChild(bubblePlaceholderHint());
   for (var i = 0; i < rows.length; i += 1) {
     wrap.appendChild(bubbleStepRowEditor(index, rows[i], i, rows.length));

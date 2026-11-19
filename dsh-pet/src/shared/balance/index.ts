@@ -13,6 +13,7 @@ export * from './parse.ts';
 export * from './percent.ts';
 export * from './view.ts';
 export * from './template.ts';
+export * from './preview.ts';
 export * from './pricing.ts';
 export * from './notice.ts';
 

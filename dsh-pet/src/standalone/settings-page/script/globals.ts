@@ -56,9 +56,10 @@ function toggleBubbleStepEdit(index) {
     renderBubblePanel();
     return;
   }
-  if (!Array.isArray(step.template) || step.template.length === 0) {
-    var seed = step.kind === 'custom' ? BUBBLE_CUSTOM_DEFAULT_ROWS : BUBBLE_STEP_SEEDS[step.kind];
-    if (seed && seed.length) step.template = copyBubbleRows(seed);
+  // 预置页打开编辑时不自动灌默认内容：没改过的页继续走内置渲染，预览=实际；
+  // 要改文字请点编辑器里的「从默认内容开始改」（seedBubbleStepContent）。
+  if (step.kind === 'custom' && (!Array.isArray(step.template) || step.template.length === 0)) {
+    step.template = copyBubbleRows(BUBBLE_CUSTOM_DEFAULT_ROWS);
   }
   state.bubbleEditStep = index;
   markDirty(true);

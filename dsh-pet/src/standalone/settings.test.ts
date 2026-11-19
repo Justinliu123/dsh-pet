@@ -294,6 +294,27 @@ test('气泡自定义页：页面上有占位符说明与可点击插入的 chip
   assert.match(script, /bubbleChip/);
 });
 
+test('气泡预览：模板用真实余额填、预置页默认内容要手动「从默认内容开始改」', () => {
+  const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
+  assert.match(script, /BUBBLE_LIVE_CONTEXT/);
+  assert.match(script, /function bubblePreviewContext/);
+  assert.match(script, /function seedBubbleStepContent/);
+  assert.match(script, /从默认内容开始改/);
+  // 打开预置页的编辑器时不再自动灌种子，只有自定义页才自动带默认行
+  assert.match(script, /if \(step\.kind === 'custom' && \(!Array\.isArray\(step\.template\)/);
+});
+
+test('气泡预览：预设页的行直接用真实余额算出来，不再拿种子模板糊样本', () => {
+  const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
+  assert.match(script, /function loadBubbleLivePreviews/);
+  assert.match(script, /function setBubbleLivePreviews/);
+  assert.match(script, /BUBBLE_LIVE_PREVIEWS/);
+  assert.match(script, /function bubbleStepPreviewRows/);
+  assert.match(script, /BUBBLE_LIVE_PREVIEWS\[step\.kind\]/);
+  // 面板画完就拉一次余额，保存后也刷新一次
+  assert.match(script, /for \(const builder of bubbleCards\(\)\) host\.append\(builder\(\)\);[\s\S]{0,200}loadBubbleLivePreviews\(\);/);
+});
+
 test('settings validation accepts per-service keys and profiles, rejects unknown fields', () => {
   const input = {
     service: 'custom',

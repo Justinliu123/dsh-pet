@@ -9,6 +9,9 @@ import { publicSettings, validateSettings, type StandaloneSettingsService } from
 import { type IncomingMessage, type ServerResponse } from 'node:http';
 import { rejectRequest } from '../request-security.ts';
 import type { ModelDiscoveryInput } from '../ai-provider/types.ts';
+import { toBalanceState } from '../../shared/balance/parse.ts';
+import { kindPreviews, type BubbleKindPreviews } from '../../shared/balance/preview.ts';
+import { bubbleTemplateContext } from '../../shared/balance/template.ts';
 import { sendJson } from './respond.ts';
 
 /** 读完请求体并解析成 JSON；空体当作空对象。 */
@@ -142,7 +145,26 @@ export function balanceHandler(
       return;
     }
     try {
-      sendJson(res, 200, await ai.queryBalance());
+      const raw = await ai.queryBalance();
+      // 顺带把「各预置页会长什么样」算出来：设置页预览用它，才能和桌宠上的一模一样。
+      // 预览失败绝不影响余额查询本身，所以单独兜住。
+      let previews: BubbleKindPreviews | undefined;
+      let context: Record<string, string> | undefined;
+      try {
+        const state = toBalanceState(raw);
+        if (state) {
+          previews = kindPreviews(state);
+          // 自定义模板的预览也要用真数据填，否则「¥103.22」这种样本值会一直挂在设置页上。
+          context = bubbleTemplateContext(state, null);
+        }
+      } catch {
+        previews = undefined;
+        context = undefined;
+      }
+      const extra: Record<string, unknown> = {};
+      if (previews !== undefined) extra.previews = previews;
+      if (context !== undefined) extra.context = context;
+      sendJson(res, 200, { ...(raw as object), ...extra });
     } catch {
       sendJson(res, 200, { ok: false, provider: '', reason: 'fetch-error', message: '余额查询失败' });
     }

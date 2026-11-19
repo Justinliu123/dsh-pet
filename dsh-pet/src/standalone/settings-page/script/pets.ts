@@ -194,6 +194,8 @@ function renderBubblePanel() {
   if (!host) return;
   host.textContent = '';
   for (const builder of bubbleCards()) host.append(builder());
+  // 面板画好后拉一次真实余额：预览要按真的钱包/窗口数据算，才能和桌宠上一致。
+  loadBubbleLivePreviews();
 }
 
 async function saveBubble() {
@@ -210,6 +212,7 @@ async function saveBubble() {
     initDrafts(merged);
     markDirty(false);
     renderBubblePanel();
+    loadBubbleLivePreviews();
     setStatus(status, '已保存到本机，桌宠与页面会立即按新设置渲染。', 'ok');
   } catch (error) {
     setStatus(status, error && error.message ? error.message : String(error), 'error');
