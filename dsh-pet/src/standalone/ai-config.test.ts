@@ -267,3 +267,30 @@ test('旧配置文件缺后加字段：铺默认值后仍可读，不因 strict 
     rmSync(home, { recursive: true, force: true });
   }
 });
+
+
+test('多家密钥并存：往别家写密钥不切换当前服务商；clearKeyOf 只删指定那一栏', async () => {
+  const home = mkdtempSync(join(tmpdir(), 'pet-ai-multi-'));
+  try {
+    const store = createAiConfig(home);
+    await store.save({ service: 'deepseek-official', keys: { DEEPSEEK_API_KEY: 'ds-key' } });
+    // 服务商仍是 DeepSeek，但把 MiniMax 的密钥一起存进来
+    const saved = await store.save({ keys: { MINIMAX_CN_API_KEY: 'mm-key' } });
+    assert.equal(store.current().service, 'deepseek-official');
+    assert.equal(store.current().apiKey, 'ds-key');
+    assert.deepEqual(saved.savedKeys.sort(), ['DEEPSEEK_API_KEY', 'MINIMAX_CN_API_KEY']);
+
+    // 删别家那一栏：当前服务商的密钥不受影响
+    const cleared = await store.save({ clearKeyOf: 'MINIMAX_CN_API_KEY' });
+    assert.deepEqual(cleared.savedKeys, ['DEEPSEEK_API_KEY']);
+    assert.equal(store.current().apiKey, 'ds-key');
+
+    // 同一栏既写又删，直接拒绝
+    assert.throws(
+      () => validateSettings({ clearKeyOf: 'DEEPSEEK_API_KEY', keys: { DEEPSEEK_API_KEY: 'x' } }, DEFAULT_AI_SETTINGS),
+      /Invalid standalone AI settings/,
+    );
+  } finally {
+    rmSync(home, { recursive: true, force: true });
+  }
+});

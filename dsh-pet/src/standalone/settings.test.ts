@@ -546,3 +546,14 @@ test('内置预置页：下拉里能按名字加回 DeepSeek 余额 / MiniMax �
   // 旧的两类预置（摘要/窗口明细）不再出现在「加入编排」的下拉里
   assert.doesNotMatch(script, /defs\.filter\(function \(def\) \{\s*return def\.kind !== 'custom'/);
 });
+
+
+test('AI 面板：多家服务商的密钥各自保存/删除，不切换当前服务商', () => {
+  const script = Array.isArray(settingsScript) ? settingsScript.join('') : String(settingsScript);
+  assert.match(script, /function renderKeyList\(/);
+  assert.match(script, /多家服务商的密钥/);
+  assert.match(script, /clearKeyOf: entry\.keyName/);
+  assert.match(script, /patch\.keys\[entry\.keyName\] = value/);
+  // 列表必须画在 populateAi 里，否则保存完全家之后新状态不会刷新
+  assert.match(script, /renderKeyList\(\);\s*\}/);
+});

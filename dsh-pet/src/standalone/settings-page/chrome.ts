@@ -55,6 +55,10 @@ export const settingsPage = `<!doctype html>
 <div class="field"><p class="fieldHint" id="balance-note">余额查询跟随上方服务商，用的是这个服务已保存的那把密钥；自定义服务商没有余额接口。</p><div class="testRow"><button id="balance-btn" class="btn ghost" type="button" disabled>查询余额</button><span id="balance-result" class="status" role="status" aria-live="polite"></span></div></div>
 <div class="testRow"><button id="test-btn" class="btn" type="button">测试连接</button><span id="test-result" class="status" role="status" aria-live="polite"></span></div>
 </div>
+<div class="card"><div class="cardHead"><h2 class="cardTitle">多家服务商的密钥</h2></div>
+<p class="cardHint">每家各存一把、互不覆盖；上面的「服务商」决定对话与碎碎念走哪家，余额会同时用上 DeepSeek 与 MiniMax 两把（都填了才看得到双额度）。</p>
+<div id="key-list"><p class="empty">正在读取本机配置…</p></div>
+</div>
 <p id="privacy" class="fineprint">所有配置与密钥仅保存在当前机器。</p>
 <div class="footer"><p class="status" id="status" role="status" aria-live="polite">正在读取本机设置…</p><button id="save" class="btn primary" type="submit" disabled>保存 AI 设置</button></div>
 </form>

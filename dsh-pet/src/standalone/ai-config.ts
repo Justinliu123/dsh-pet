@@ -247,6 +247,10 @@ const patchSchema = z
     automaticWhispers: z.boolean().optional(),
     whisperIntervalSec: z.number().int().min(60).max(86400).optional(),
     clearKey: z.boolean().optional(),
+    /** 指定清空哪一栏密钥：设置页的多服务商列表用它在不切换当前服务商的情况下删掉别家的密钥。 */
+    clearKeyOf: z
+      .enum(['DEEPSEEK_API_KEY', 'MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY', 'OPENCODE_GO_API_KEY', 'COMMANDCODE_API_KEY', 'CUSTOM_API_KEY'])
+      .optional(),
     clearDeepseekKey: z.boolean().optional(),
     /** 旧文件会带这个键；读盘时整份配置也走补丁校验，所以必须接受，但取值一律被覆盖成 true。 */
     enabled: z.boolean().optional(),
@@ -336,9 +340,12 @@ export function validateSettings(input: unknown, previous: Readonly<StandaloneAi
     const written = KEY_NAMES.filter((name) => (keyPatch?.[name] ?? '') !== '');
     // 清空与写入同时出现时意图不明，直接拒绝。
     if (patch.clearKey && written.length > 0) throw new Error('Conflicting key changes');
+    if (patch.clearKeyOf !== undefined && written.indexOf(patch.clearKeyOf) >= 0) {
+      throw new Error('Conflicting key changes');
+    }
     if (patch.clearDeepseekKey && patch.deepseekApiKey) throw new Error('Conflicting key changes');
 
-    const { clearKey, clearDeepseekKey, keys: _keys, profiles: _profiles, ...values } = patch;
+    const { clearKey, clearKeyOf, clearDeepseekKey, keys: _keys, profiles: _profiles, ...values } = patch;
     void _keys;
     void _profiles;
 
@@ -347,6 +354,7 @@ export function validateSettings(input: unknown, previous: Readonly<StandaloneAi
     const keys: KeyMap = { ...previous.keys };
     for (const name of written) keys[name] = keyPatch![name]!;
     if (clearKey) keys[serviceKeyName(service)] = '';
+    if (clearKeyOf !== undefined) keys[clearKeyOf] = '';
 
     // 一家的 profile 整体替换，没提交的几家原样保留。
     const profiles: ProfileMap = { ...previous.profiles, ...(patch.profiles ?? {}) };

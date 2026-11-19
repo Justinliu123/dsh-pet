@@ -119,6 +119,81 @@ function populateAi(data) {
   byId('deepseek-key-actions').hidden = data.hasDeepseekKey !== true;
   byId('deepseekApiKey').value = '';
   byId('deepseekApiKey').disabled = false;
+  renderKeyList();
+}
+
+/** 画「多家服务商的密钥」列表：每家一行，各自独立保存/删除，不改当前服务商。 */
+function renderKeyList() {
+  const host = byId('key-list');
+  host.textContent = '';
+  for (let i = 0; i < serviceCatalog.length; i++) {
+    const entry = serviceCatalog[i];
+    if (!entry || typeof entry.id !== 'string' || typeof entry.keyName !== 'string') continue;
+    const saved = savedKeys.indexOf(entry.keyName) >= 0;
+    const row = make('div', { class: 'keyRow' });
+    const head = make('div', { class: 'keyRowHead' });
+    head.appendChild(make('span', { class: 'keyRowLabel', text: String(entry.label || entry.id) }));
+    head.appendChild(make('span', { class: 'hintInline', text: saved ? '已保存 · 不回显' : '尚未设置' }));
+    row.appendChild(head);
+    const input = make('input', {
+      class: 'keyRowInput',
+      type: 'password',
+      autocomplete: 'new-password',
+      maxlength: '8192',
+      placeholder: saved ? '要换就粘贴新密钥，留空不动' : '粘贴密钥后点右侧保存',
+    });
+    const saveBtn = make('button', { class: 'btn', type: 'button', text: '保存' });
+    const delBtn = make('button', { class: 'btn ghost', type: 'button', text: '删除' });
+    delBtn.hidden = !saved;
+    saveBtn.addEventListener('click', function () {
+      const value = input.value.trim();
+      if (value === '') {
+        input.focus();
+        return;
+      }
+      const patch = { keys: {} };
+      patch.keys[entry.keyName] = value;
+      saveBtn.disabled = true;
+      aiRequest('POST', patch)
+        .then(function (data) {
+          populateAi(data);
+          setStatus(byId('status'), '已保存「' + String(entry.label || entry.id) + '」的密钥。', 'ok');
+        })
+        .catch(function (error) {
+          setStatus(byId('status'), error && error.message ? error.message : String(error), 'error');
+        })
+        .then(function () {
+          saveBtn.disabled = false;
+        });
+    });
+    delBtn.addEventListener('click', function () {
+      confirmDialog({
+        title: '删除「' + String(entry.label || entry.id) + '」的密钥',
+        text: '删除后这家服务不可用，直到重新填写密钥；其他服务商的密钥不受影响。',
+        confirmLabel: '删除',
+        danger: true,
+      }).then(function (confirmed) {
+        if (!confirmed) return;
+        aiRequest('POST', { clearKeyOf: entry.keyName })
+          .then(function (data) {
+            populateAi(data);
+            setStatus(byId('status'), '已删除「' + String(entry.label || entry.id) + '」的密钥。', 'ok');
+          })
+          .catch(function (error) {
+            setStatus(byId('status'), error && error.message ? error.message : String(error), 'error');
+          });
+      });
+    });
+    const actions = make('div', { class: 'keyRowActions' });
+    actions.appendChild(saveBtn);
+    actions.appendChild(delBtn);
+    row.appendChild(input);
+    row.appendChild(actions);
+    host.appendChild(row);
+  }
+  if (host.childNodes.length === 0) {
+    host.appendChild(make('p', { class: 'empty', text: '先把服务商目录读出来再配置密钥。' }));
+  }
 }
 
 /** 用户换了服务商：回填该家自己的协议/地址/模型，其余状态跟着走。 */

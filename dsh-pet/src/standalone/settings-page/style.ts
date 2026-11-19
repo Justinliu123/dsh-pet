@@ -122,6 +122,13 @@ input:disabled,select:disabled,textarea:disabled{background:var(--dsw-static-neu
 .comboToggle{position:absolute;right:4px;display:flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:var(--dsw-radius-xs);background:transparent;color:var(--dsw-alias-label-tertiary);cursor:pointer}
 .comboToggle:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover)}
 .comboToggle:disabled{opacity:.45;cursor:not-allowed}
+.keyRow{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;padding:10px 0;border-top:1px solid var(--dsw-alias-border-l2)}
+.keyRow:first-child{border-top:none}
+.keyRowHead{grid-column:1 / -1;display:flex;align-items:center;gap:8px}
+.keyRowLabel{font-size:13px;color:var(--dsw-alias-label-primary)}
+.keyRowInput{width:100%;height:32px;padding:0 10px;border-radius:var(--dsw-radius-md);border:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font-size:13px}
+.keyRowActions{display:flex;gap:8px}
+.keyRowActions .btn{height:32px;padding:0 12px}
 .keyActions{display:flex;justify-content:flex-end;margin-top:8px}
 .keyActions .btn{height:26px;padding:0 10px;font-size:12px}
 .avatarRow{display:flex;align-items:center;gap:12px;margin:0 0 14px}
