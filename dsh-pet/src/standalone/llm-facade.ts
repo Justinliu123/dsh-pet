@@ -21,7 +21,7 @@ export interface StandaloneModelService {
    * 单独开一个方法而不是塞进 currentSelection：余额服务商与聊天用的模型服务商是两件事，
    * 混在一起会让模型解析认不出自己的 provider。
    */
-  balanceAuth(): { provider: string; apiKey: string };
+  balanceAuth(): { provider: string; apiKey: string; keys: Record<string, string> };
   /**
    * 单独保存的 DeepSeek 语音密钥；空串表示没单独配。
    *

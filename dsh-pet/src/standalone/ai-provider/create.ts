@@ -167,7 +167,11 @@ export function createStandaloneAi(
     getSettings: () => withCatalog(store.publicSettings()),
     saveSettings: async (input) => withCatalog(await saveSettings(runtime, store, input)),
     isReady: () => runtime.ready(),
-    balanceAuth: () => ({ provider: store.current().service, apiKey: store.current().apiKey }),
+    balanceAuth: () => ({
+      provider: store.current().service,
+      apiKey: store.current().apiKey,
+      keys: { ...store.current().keys },
+    }),
     deepseekKey: () => store.current().deepseekApiKey,
     testConnection: (input) =>
       runtime.disposed

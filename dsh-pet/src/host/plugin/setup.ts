@@ -40,6 +40,13 @@ export interface StandaloneBalanceAuth {
   provider: string;
   /** 设置页保存的密钥；空串表示未保存。 */
   apiKey: string;
+  /**
+   * 各服务商分别保存的密钥（KeyName → key）。
+   *
+   * 组合余额要同时问两家：主服务商的钱包 + 另一家的订阅额度。
+   * 只在独立模式提供；缺省时退回 apiKey（旧行为）。
+   */
+  keys?: Readonly<Record<string, string>>;
 }
 
 /** 装配产物：apply 后续逻辑与路由层共用的对象。 */

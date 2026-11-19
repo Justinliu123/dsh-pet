@@ -92,6 +92,9 @@ export function createBalancePoll(deps: BalancePollInput) {
       const standalone = standaloneAiBalance();
       const provider = standalone?.provider || ctx.agentDefaultModel.currentSelection().provider;
       const resolveKey = async (ref: string): Promise<string | undefined> => {
+        // 独立模式：先用「按服务商分开存」的密钥，组合余额要同时问两家（DeepSeek 钱包 + MiniMax 额度）。
+        const own = standalone?.keys?.[ref];
+        if (own) return own;
         if (standalone?.apiKey) return standalone.apiKey;
         const rc = await ctx.credentials.resolve(credentialRef(ref));
         return rc?.value;
@@ -108,7 +111,11 @@ export function createBalancePoll(deps: BalancePollInput) {
       spend.observe(base);
       // DeepSeek 账户余额与 MiniMax 订阅额度同屏：当前模型用哪家就先取哪家，
       // 再把另一家作为组合段补进来；任一失败只影响自己那一段，不影响已拿到的数据。
-      const partner = partnerProviderOf(provider);
+      // 独立模式没有 DSH 账号服务：'deepseek-account' 只能换成 API Key 路由（deepseek-official），
+      // 否则那一段永远 credential-missing，组合视图就只剩一家。
+      const partnerRaw = partnerProviderOf(provider);
+      const partner =
+        partnerRaw === 'deepseek-account' && standalone !== undefined ? 'deepseek-official' : partnerRaw;
       const extra = partner === undefined ? undefined : await queryBalance(partner, resolveKey, resolveAccount);
       if (extra) spend.observe(extra);
       const result = composeBalance(base, extra, spend);

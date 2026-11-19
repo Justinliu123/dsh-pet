@@ -98,7 +98,7 @@ export interface StandaloneAiService {
   /** 按设置里选中的服务商查询余额；未选择或缺少密钥时返回显式失败，绝不伪造数字。 */
   queryBalance(): Promise<BalanceResult>;
   /** 余额查询要用的服务商与密钥；供宿主半侧的余额轮询取用，不进对外设置视图。 */
-  balanceAuth(): { provider: string; apiKey: string };
+  balanceAuth(): { provider: string; apiKey: string; keys: Record<string, string> };
   /** 单独保存的 DeepSeek 语音密钥；空串表示没单独配。 */
   deepseekKey(): string;
   /** 是否满足发起请求的全部条件。 */
