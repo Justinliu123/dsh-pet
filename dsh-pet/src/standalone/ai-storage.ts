@@ -24,12 +24,20 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { petDataRoot } from '../host/data-paths.ts';
 
 /** 配置文件的字节上限。 */
 const MAX_CONFIG_BYTES = 32_768;
 
-/** 只把权限授给当前用户；绝不把 shell 命令、账户名或未校验的 SID 交给 icacls。 */
-function restrictFile(path: string): void {
+/**
+ * 只把权限授给当前用户；绝不把 shell 命令、账户名或未校验的 SID 交给 icacls。
+ *
+ * 便携版会把旧数据复制进安装目录，那里继承来的 ACL 往往包含 BUILTIN\Users，
+ * 复制完必须显式收紧，否则读取侧会以「权限不可信」拒绝加载。
+ *
+ * @param path - 要收紧的文件。
+ */
+export function restrictFileToCurrentUser(path: string): void {
   if (process.platform !== 'win32') {
     chmodSync(path, 0o600);
     return;
@@ -50,7 +58,8 @@ function restrictFile(path: string): void {
 
 /** 解析并准备配置目录，拒绝符号链接。 */
 function configPath(home: string): string {
-  const directory = join(home, 'dsh-pet');
+  // 数据根走共享口径：独立应用会把便携目录写进环境变量，插件/CLI 不设时仍是 <home>/dsh-pet。
+  const directory = petDataRoot(home);
   if (!existsSync(directory)) mkdirSync(directory, { recursive: true, mode: 0o700 });
   const info = lstatSync(directory);
   if (!info.isDirectory() || info.isSymbolicLink()) throw new Error('Unsafe settings directory');
@@ -68,7 +77,7 @@ export function readAiSettings(home: string): unknown | undefined {
   if (!existsSync(path)) return undefined;
   const stat = lstatSync(path);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > MAX_CONFIG_BYTES) throw new Error('Unsafe settings file');
-  // 显式宽权限比读不到更危险：先拒绝，再由 restrictFile 收紧到当前 SID。
+  // 显式宽权限比读不到更危险：先拒绝，再由 restrictFileToCurrentUser 收紧到当前 SID。
   // 这里创建的文件除当前 SID 外不应有任何显式授权。
   if (process.platform === 'win32') {
     const acl = execFileSync(join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'icacls.exe'), [path], {
@@ -78,7 +87,7 @@ export function readAiSettings(home: string): unknown | undefined {
     if (/\b(?:Everyone|BUILTIN\\Users|Authenticated Users)\s*:/i.test(acl))
       throw new Error('Unsafe settings permissions');
   }
-  restrictFile(path);
+  restrictFileToCurrentUser(path);
   const fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   try {
     if (fstatSync(fd).size > MAX_CONFIG_BYTES) throw new Error('Settings file too large');
@@ -114,7 +123,7 @@ export function writePrivateJson(path: string, settings: unknown): void {
   // 先建空临时文件并收紧权限，再写入任何密钥，避免密钥短暂落进宽权限文件。
   const fd = openSync(temporary, constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY, 0o600);
   try {
-    restrictFile(temporary);
+    restrictFileToCurrentUser(temporary);
     writeFileSync(fd, JSON.stringify(settings), { encoding: 'utf8' });
     fsyncSync(fd);
     closeSync(fd);

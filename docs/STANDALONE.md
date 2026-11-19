@@ -9,27 +9,32 @@
 | 可执行文件 | `E:\projects\dsh-pet\app\dsh-pet.exe`（junction，指向 `D:\deepseek\dsh-pet-app\win-unpacked`） |
 | 桌面快捷方式 | 桌面「DSH 桌宠」 |
 | 开机自启 | `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\DSH-Pet.lnk` |
-| 用户数据（配置/账本/日志） | `D:\deepseek\dsh-pet\`（与 DSH 插件共用同一个 DSH 数据根） |
-| Electron userData | `C:\Users\Lenovo\AppData\Roaming\dsh-pet\` |
+| 用户数据（配置/账本/日志） | `<exe 目录>\data\`（即 `D:\deepseek\dsh-pet-app\win-unpacked\data\`，便携、跟着 exe 走） |
+| 桥目录（与 DSH 交换状态） | `%APPDATA%\dsh-pet\bridge\`（两边都往这里读写小文件） |
+| Electron userData | `C:\Users\Lenovo\AppData\Roaming\dsh-pet\`（Chromium 自己的缓存，不是用户数据） |
 
-> 数据目录跟着 DSH 走：DSH NEXT 把数据根记在 `%APPDATA%\DSH NEXT\home\desktop-next-location.json` 里
-> （现在是 `D:\deepseek`）。桌宠启动时按「环境变量 `DSH_HOME` → DSH NEXT 记录的目录 → `%USERPROFILE%\.dsh`」
-> 的顺序找数据根，所以整个 `.dsh` 搬到 D 盘后，桌宠仍会跟着走。
-> 把目录复制到别处后记得收紧权限：密钥文件（`standalone-ai.json`）如果带
-> `Authenticated Users` / `BUILTIN\Users` 这类宽权限，桌宠会拒绝读取并报
-> `Cannot securely load standalone AI settings.`，用
-> `icacls <文件> /inheritance:r /grant:r *<你的SID>:F` 收紧即可。
+> **绿色版**：整个 `win-unpacked` 目录拷到别的电脑，双击 `dsh-pet.exe` 就能用；数据全在
+> 同目录的 `data\` 里（配置、AI 密钥、账本、日志 `data\logs.txt`、端口记忆 `data\app-port.json`）。
+> 首次启动如果 `data\` 还是空的，会把旧位置 `<DSH 数据根>\dsh-pet\` 里的
+> `main-config.jsonc`、`standalone-ai.json`、`spend.json` 复制过来（只补缺失、不覆盖已存在的），
+> 复制后自动把 ACL 收紧到当前用户——便携包所在的安装目录常带 `BUILTIN\Users` 之类宽权限，
+> 不收紧密钥文件就会被拒绝加载（报 `Cannot securely load standalone AI settings.`）。
+> 手工修复用：`icacls <文件> /inheritance:r /grant:r *<你的SID>:F`。
+>
+> 开发注意：`node scripts/dist.mjs` 会清空 `win-unpacked`，**重新打包前先备份 `win-unpacked\data\`**，
+> 打完再放回去（或者用 `DSH_PET_OUTPUT_DIR` 换一个输出目录再合并）。
 
 ## 两种形态
 
 1. **DSH 没开**：独立桌宠照常运行，可以显示本地账本、余额（需在右键「打开 AI 设置」里配服务商）、提醒、番茄钟等。
-2. **DSH 开着**：DSH 里的 dsh-pet 插件启动后把本机入口写进
-   `<DSH 数据根>\dsh-pet\standalone-bridge.json`；独立桌宠每秒读一次并连上。描述文件没有时（例如 DSH 侧还是旧插件、或
-   插件刚重启还没写文件），独立桌宠会去读 DSH 自己的日志（`<DSH 数据根>\logs\desktop-next*.log` 尾部的
+2. **DSH 开着**：DSH 里的 dsh-pet 插件只当**数据通道**——它启动后把本机入口写进
+   `%APPDATA%\dsh-pet\bridge\standalone-bridge.json`；独立桌宠每秒读一次并连上。描述文件没有时（例如 DSH 侧还是旧插件、
+   或插件刚重启还没写文件），独立桌宠会去读 DSH 自己的日志（`<DSH 数据根>\logs\desktop-next*.log` 尾部的
    `dsh web: http://127.0.0.1:<port>/?token=…`）兜底发现入口，所以**多数情况下不用重启 DSH 也能连上**。连上后：
    - 会话工作状态（thinking / working / waiting / result）、通知、语音、说话都来自 DSH；
    - 余额与额度以 DSH 侧为准（MiniMax 5h/周额度 + DeepSeek 账户余额 + 今日已用）；
-   - DSH 侧检测到独立桌宠在跑（心跳文件 `standalone-running.json`），**不再拉起第二套桌面窗口**，只在页面里保留 overlay。
+   - 插件**不再**在 DSH 页面里画宠物、**不再**拉起桌面 Helper 窗口、**不再**自动生成碎碎念——那些都由 exe 负责，
+     所以不会出现两只宠物或者同一句话念两遍。
 
    连接日志：`[dsh-pet] DSH 桥已连接：http://127.0.0.1:<port>（…）`；断开日志：`[dsh-pet] DSH 桥已断开（…）：独立功能照常运行`，此时工作状态回落到空闲，余额沿用最后一次缓存。
 
@@ -129,8 +134,11 @@
 插件包目录被本地构建产物替换过，plugin_manager 判定为 `package-moved`，热加载不可用：
 
 1. 菜单里退出 DSH NEXT，重新打开；
-2. 确认 `<DSH 数据根>\dsh-pet\standalone-bridge.json` 出现；
+2. 确认 `%APPDATA%\dsh-pet\bridge\standalone-bridge.json` 出现（插件只当数据通道，桥文件不在 `<DSH 数据根>` 下了）；
 3. 独立桌宠日志里出现「DSH 桥已连接」。
+
+重启后 DSH 侧不再有页内宠物、不再有第二个桌面小窗、也不会再自己生成碎碎念（`logs.txt` 里的
+`[dsh-pet] 碎碎念调度` 只应来自 exe 一侧）。
 
 另外，插件管理器写进 profile 的 `cordis.patch.yml` 里那条 `- { id: dsh-pet, disabled: false }`
 是本机手工加的（商城那条命令只会报 `application: overridden`，不会真正生效）；把整个 profile

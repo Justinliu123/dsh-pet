@@ -37,7 +37,13 @@ export type LoopsInput = {
   Pick<ChatMemory, 'publishSleepTalk'> &
   Pick<BalancePoll, 'refreshBalance'> &
   Pick<HostSetup, 'standaloneAiPolicy'> &
-  Pick<BalancePoll, 'whisperPeriodSec'>;
+  Pick<BalancePoll, 'whisperPeriodSec'> & {
+    /**
+     * 只做数据通道时不生成碎碎念（插件在 DSH 里跑时为 true）。
+     * 文案与语音归独立版所有：两边都生成会出现两份文案、语音念两遍。
+     */
+    readonly whisperDisabled?: boolean;
+  };
 
 /** 注册轮询循环；返回的清理函数由 ctx.effect 收集。 */
 export function registerLoops(deps: LoopsInput): void {
@@ -53,6 +59,7 @@ export function registerLoops(deps: LoopsInput): void {
     refreshBalance,
     sleep,
     standaloneAiPolicy,
+    whisperDisabled,
     whisperPeriodSec,
   } = deps;
   // 余额周期刷新：host 侧唯一定时器。周期每次重新读配置 eventsRefreshSec.balance，改了下一拍跟上。
@@ -99,7 +106,8 @@ export function registerLoops(deps: LoopsInput): void {
   // 碎碎念周期：host 侧调度。一拍 = 读一次配置 + 把「到点」的宠物排进错峰队列；下一拍按最短周期排。
   // 用固定拍 + 逐宠物比对 lastWhisperAt，而不是每宠一个定时器：宠物随配置增删、周期随条目改，
   // 固定拍天然跟上，不用维护一堆定时器的生命周期。
-  ctx.effect(() => {
+  // 数据通道模式（插件在 DSH 里跑）不装这套调度：文案与语音归独立版，否则两边各生成一份。
+  if (whisperDisabled !== true) ctx.effect(() => {
     let disposed = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
     /** 待发布的宠物（FIFO）；一次只发一只，两只之间隔 {@link WHISPER_STAGGER_MS}。 */

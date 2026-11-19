@@ -9,6 +9,7 @@ import { mkdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { writePrivateJson } from './ai-storage.ts';
+import { petDataRoot } from '../host/data-paths.ts';
 
 /** 运行状态内容；token 只交给本机启动器。 */
 interface RuntimeDetails {
@@ -30,7 +31,7 @@ interface RuntimeDetails {
  * @throws 无法安全写入时抛出。
  */
 export function writeStandaloneRuntime(home: string, details: RuntimeDetails): () => void {
-  const directory = join(home, 'dsh-pet');
+  const directory = petDataRoot(home);
   mkdirSync(directory, { recursive: true });
   const file = join(directory, 'standalone-runtime.json');
   try {

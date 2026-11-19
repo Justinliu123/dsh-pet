@@ -63,19 +63,29 @@ export function parseArgs(argv: string[]): { options: CliOptions } | { error: st
 }
 
 /**
+ * 由「包根 + 数据根」推导配置路径集。
+ *
+ * @param root - 插件包根目录。
+ * @param petRoot - 桌宠数据根（插件在 DSH 下是 `<DSH_HOME>/dsh-pet`；独立版可能是便携目录）。
+ * @returns 与宿主半侧一致的路径集。
+ */
+export function configPathsAt(root: string, petRoot: string): ConfigPaths {
+  return {
+    defaultFile: join(root, 'assets', 'config.jsonc'),
+    userFile: join(petRoot, 'main-config.jsonc'),
+    legacyUserFile: join(petRoot, 'main-config.json'),
+    petDir: join(petRoot, 'pet'),
+  };
+}
+
+/**
  * 推导配置路径集（宿主半侧那份推导的只读镜像）。
  * @param root - 插件包根目录。
  * @param home - DSH_HOME。
  * @returns 与宿主半侧一致的路径集。
  */
 export function configPathsFor(root: string, home: string): ConfigPaths {
-  const userRoot = join(home, 'dsh-pet');
-  return {
-    defaultFile: join(root, 'assets', 'config.jsonc'),
-    userFile: join(userRoot, 'main-config.jsonc'),
-    legacyUserFile: join(userRoot, 'main-config.json'),
-    petDir: join(userRoot, 'pet'),
-  };
+  return configPathsAt(root, join(home, 'dsh-pet'));
 }
 
 /** 宠物列表的展示串：display 原样打印，供用户确认。 */

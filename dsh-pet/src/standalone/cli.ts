@@ -11,6 +11,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { flattenPetList, readAllConfig } from '../host/config.ts';
+import { bridgeDir, DATA_ROOT_ENV, petDataRoot } from '../host/data-paths.ts';
 import { dshHomeDir, packageRoot } from '../host/helper-process.ts';
 import { apply } from '../host/index.ts';
 import { defaultLog, setDefaultLogger } from '../host/log-file.ts';
@@ -20,7 +21,7 @@ import { createRequestSecurity } from './request-security.ts';
 import { writeStandaloneRuntime } from './runtime-state.ts';
 import { createStandaloneContext, type RegisteredRoute, type StandaloneLogger } from './context.ts';
 import { createStandaloneLogger } from './logger.ts';
-import { configPathsFor, describePets, isDesktopVisible, parseArgs, USAGE } from './options.ts';
+import { configPathsAt, describePets, isDesktopVisible, parseArgs, USAGE } from './options.ts';
 import { bridgeStateOfContext, createDshBridge, type DshBridge } from './dsh-bridge.ts';
 import { startAppPresence, type AppPresenceHandle } from './presence.ts';
 import { listenStandaloneServer } from './server.ts';
@@ -30,7 +31,10 @@ import { ROUTE_SEGMENT } from '../shared/constants.ts';
 /** 启动独立模式：先起服务拿到端口，再 apply。 */
 async function run(logger: StandaloneLogger, options: { port: number }): Promise<void> {
   const home = dshHomeDir();
-  const paths = configPathsFor(packageRoot, home);
+  // 数据根走共享口径：默认 <DSH 数据根>/dsh-pet，可用 DSH_PET_DATA_ROOT 指到别处（便携/测试）。
+  const petRoot = petDataRoot(home);
+  process.env[DATA_ROOT_ENV] = petRoot;
+  const paths = configPathsAt(packageRoot, petRoot);
 
   // 包内默认配置缺失时宿主半侧每个请求都会失败，先给可操作的诊断。
   if (!existsSync(paths.defaultFile)) {
@@ -92,7 +96,8 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
 
   let shuttingDown = false;
   // 独立桌宠心跳与 DSH 桥：DSH 宿主在跑时接入工作状态/通知/余额；DSH 不在时桥静默断开。
-  const petRoot = join(home, 'dsh-pet');
+  // 桥文件在机器级共享目录（插件与独立版都认），与各自的数据根无关。
+  const bridgeRoot = bridgeDir();
   let presence: AppPresenceHandle | undefined;
   let bridge: DshBridge | undefined;
   const shutdown = async (reason: string): Promise<void> => {
@@ -124,7 +129,7 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
   process.on('SIGTERM', () => requestShutdown('SIGTERM'));
 
   // 先亮存活标记再 apply：DSH 侧宿主可能同一时刻正在 apply，看到标记才会只当数据源、不拉第二套 Helper。
-  presence = startAppPresence(petRoot, { log: (message) => logger.info(message) });
+  presence = startAppPresence(bridgeRoot, { log: (message) => logger.info(message) });
 
   // 这一句里注册路由表、状态仓与桌面 Helper（含 bridge 管道）。
   apply(context.ctx);
@@ -136,7 +141,12 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
   bridge =
     bridgeState === undefined
       ? undefined
-      : createDshBridge({ state: bridgeState, userRoot: petRoot, log: (message) => logger.info(message) });
+      : createDshBridge({
+          state: bridgeState,
+          userRoot: bridgeRoot,
+          dshHome: home,
+          log: (message) => logger.info(message),
+        });
   if (bridge === undefined) {
     logger.info('提示：宿主半侧没有提供 petBridge7340 状态仓，DSH 桥未启动（不影响独立功能）');
   } else {

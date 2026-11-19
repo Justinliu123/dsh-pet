@@ -120,12 +120,6 @@
         "0.2.2-alpha.2": "compatible",
         "0.2.2-rc.1": "compatible"
       }
-    },
-    "client": {
-      "inject": [
-        "@deepseek-ai/dsh-client-connection"
-      ],
-      "platform": "web"
     }
   },
   "peerDependencies": {

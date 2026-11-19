@@ -6,22 +6,23 @@
  * @module dsh-pet/src/app/main
  */
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { accessSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, constants as fsConstants } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { flattenPetList, readAllConfig } from '../host/config.ts';
+import { flattenPetList, readAllConfig, type ConfigPaths } from '../host/config.ts';
+import { DATA_ROOT_ENV, bridgeDir } from '../host/data-paths.ts';
 import { dshHomeDir } from '../host/helper-process.ts';
 import { apply } from '../host/index.ts';
 import { createFileLogger, setDefaultLogger } from '../host/log-file.ts';
 import { createStandaloneAi } from '../standalone/ai-provider.ts';
 import { packageVersion } from '../standalone/check.ts';
 import { createStandaloneContext, type RegisteredRoute } from '../standalone/context.ts';
-import { configPathsFor } from '../standalone/options.ts';
 import { createRequestSecurity } from '../standalone/request-security.ts';
 import { bridgeStateOfContext, createDshBridge } from '../standalone/dsh-bridge.ts';
 import { startAppPresence } from '../standalone/presence.ts';
+import { restrictFileToCurrentUser } from '../standalone/ai-storage.ts';
 
 import { installDesktopAuth, type DesktopSession } from './desktop-auth.ts';
 import { startRouter } from './router.ts';
@@ -38,6 +39,8 @@ interface WebContentsLike {
   ): void;
 }
 interface ElectronApp {
+  readonly isPackaged: boolean;
+  getPath(name: 'userData' | 'appData'): string;
   whenReady(): Promise<void>;
   requestSingleInstanceLock(): boolean;
   exit(code?: number): void;
@@ -83,6 +86,70 @@ function rememberPort(userRoot: string, port: number): void {
 }
 
 /**
+ * 解析本应用的数据根：便携优先，`<exe 目录>\data` 可写就用它（整个文件夹拷走即可换机）。
+ *
+ * 便携目录不可写（装进 Program Files、只读介质）时退到 Electron 的每用户 userData，
+ * 宁可换位置也不能让首次运行就起不来。开发态（未打包）没有「exe 目录」这个概念，同样用 userData。
+ */
+function resolveAppDataRoot(): string {
+  if (app.isPackaged) {
+    const portable = join(dirname(process.execPath), 'data');
+    try {
+      mkdirSync(portable, { recursive: true });
+      accessSync(portable, fsConstants.W_OK);
+      return portable;
+    } catch {
+      log(`便携数据目录不可写，改用用户目录：${portable}`);
+    }
+  }
+  return app.getPath('userData');
+}
+
+/** 首次以便携目录运行时可迁移的旧文件（老版本放在 DSH 数据根下）。 */
+const MIGRATED_FILES = ['main-config.jsonc', 'standalone-ai.json', 'spend.json'] as const;
+
+/**
+ * 把老数据根里的配置搬到新数据根：只在目标缺失时复制，绝不覆盖用户已有的新配置。
+ *
+ * @param legacyRoot - 旧数据根（`<DSH 数据根>/dsh-pet`）。
+ * @param dataRoot - 新数据根。
+ */
+function migrateLegacyData(legacyRoot: string, dataRoot: string): void {
+  if (resolve(legacyRoot) === resolve(dataRoot)) return;
+  for (const name of MIGRATED_FILES) {
+    const from = join(legacyRoot, name);
+    const to = join(dataRoot, name);
+    if (!existsSync(from) || existsSync(to)) continue;
+    try {
+      mkdirSync(dataRoot, { recursive: true });
+      copyFileSync(from, to);
+      // 新目录的 ACL 是从安装目录继承来的（便携包里常含 BUILTIN\Users），复制完必须收紧到当前用户，
+      // 否则读取侧会以「权限不可信」拒绝加载。
+      try {
+        restrictFileToCurrentUser(to);
+      } catch (error) {
+        log(`迁移 ${name} 后收紧权限失败（可手工 icacls 修复）：${String(error)}`);
+      }
+      log(`已从旧数据根迁移 ${name}：${from} → ${to}`);
+    } catch (error) {
+      log(`迁移 ${name} 失败（继续使用新目录）：${String(error)}`);
+    }
+  }
+}
+
+/** 本应用的配置路径：数据根可能是便携目录，不能用 `configPathsFor`（它固定拼 `<home>/dsh-pet`）。 */
+function appConfigPaths(): ConfigPaths {
+  const root = process.env[DATA_ROOT_ENV] ?? join(dshHomeDir(), 'dsh-pet');
+  return {
+    defaultFile: join(packageRoot, 'assets', 'config.jsonc'),
+    userFile: join(root, 'main-config.jsonc'),
+    legacyUserFile: join(root, 'main-config.json'),
+    petDir: join(root, 'pet'),
+  };
+}
+
+
+/**
  * 桌面 Helper 的 DPI 探测子进程标记。
  *
  * 打包后的 Electron 会忽略「脚本路径」参数、直接加载本应用的 main（lib/app.js）：Helper 想用
@@ -122,7 +189,12 @@ async function boot(): Promise<void> {
   // 独立应用没有控制台：插件日志、standalone 日志与同进程 Helper/渲染端的 console 全部落盘。
   // 原始 console 方法要先快照——包装后的 console 会转给文件 logger，logger 的 base 必须指向原始方法，
   // 否则 logger → console → logger 无限递归。
-  const logFile = join(dshHomeDir(), 'dsh-pet', 'logs.txt');
+  // 数据根先定：便携版是 `<exe 目录>\data`，装进不可写目录时退到每用户 userData。
+  // 之后日志、配置、端口记录、余额记账全部从这里派生——不再依赖 DSH 的数据目录，换台电脑解压即用。
+  const dataRoot = resolveAppDataRoot();
+  process.env[DATA_ROOT_ENV] = dataRoot;
+  migrateLegacyData(join(dshHomeDir(), 'dsh-pet'), dataRoot);
+  const logFile = join(dataRoot, 'logs.txt');
   const rawConsole = {
     log: console.log.bind(console),
     info: console.info.bind(console),
@@ -164,7 +236,8 @@ async function boot(): Promise<void> {
   });
 
   // 数据根先算出来：端口偏好与宿主的 userRoot 是同一个目录。
-  const petRoot = join(dshHomeDir(), 'dsh-pet');
+  const petRoot = dataRoot;
+  const bridgeRoot = bridgeDir();
   const server = await startRouter(routes, {
     security,
     ai,
@@ -190,8 +263,9 @@ async function boot(): Promise<void> {
   process.env.DSH_PET_SITE_URL = security.authenticatedUrl(origin);
   if (!process.env.DSH_PET_SCALE) process.env.DSH_PET_SCALE = '1';
 
-  // 先亮存活标记再 apply：DSH 侧宿主可能同一时刻正在 apply，看到标记才会只当数据源、不拉第二套 Helper。
-  const presence = startAppPresence(petRoot, { log });
+  // 先亮存活标记再 apply：DSH 侧插件据此只当数据源（插件本身已不建窗，这里保留是为了让 DSH 侧
+  // 仍能看出「独立版在跑」，也便于排障）。桥文件在机器级共享目录，与数据根无关。
+  const presence = startAppPresence(bridgeRoot, { log });
 
   apply(context.ctx);
   log(`apply() 完成：routes=${routes.length} 失败=${context.failures.length}`);
@@ -203,7 +277,7 @@ async function boot(): Promise<void> {
   const bridge =
     bridgeState === undefined
       ? undefined
-      : createDshBridge({ state: bridgeState, userRoot: petRoot, log });
+      : createDshBridge({ state: bridgeState, userRoot: bridgeRoot, dshHome: dshHomeDir(), log });
   if (bridge === undefined) {
     log('提示：宿主半侧没有提供 petBridge7340 状态仓，DSH 桥未启动（不影响独立功能）');
   } else {
@@ -257,7 +331,7 @@ async function boot(): Promise<void> {
  */
 function desktopPets(): Array<{ id: string; size: number }> {
   try {
-    const pets = flattenPetList(readAllConfig(configPathsFor(packageRoot, dshHomeDir())));
+    const pets = flattenPetList(readAllConfig(appConfigPaths()));
     const desktop = pets
       .filter((pet) => pet.display === 'desktop' || pet.display === 'both')
       .map((pet) => ({ id: String(pet.id), size: Number(pet.size) }));
@@ -271,7 +345,7 @@ function desktopPets(): Array<{ id: string; size: number }> {
 
 /** 状态接口与落地页共用的数据源；配置读不出来时如实显示 0 只，不让页面 500。 */
 function status(port: number): Record<string, unknown> {
-  const paths = configPathsFor(packageRoot, dshHomeDir());
+  const paths = appConfigPaths();
   let pets: Array<Record<string, unknown>> = [];
   try {
     pets = flattenPetList(readAllConfig(paths));

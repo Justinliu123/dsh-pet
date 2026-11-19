@@ -7,7 +7,7 @@ import { createHostSetup } from './plugin/setup.ts';
 import { readAllConfig } from './config.ts';
 import { currentEnvironment, setCityProvider } from './environment.ts';
 import { announceDshBridge } from './plugin/bridge-descriptor.ts';
-import { isStandaloneAppRunning } from './plugin/app-presence.ts';
+import { bridgeDir } from './data-paths.ts';
 import { createHttpRoute, registerHttpRoute } from './plugin/http-route.ts';
 import { registerLifecycle } from './plugin/lifecycle.ts';
 import { registerChatCommand } from './plugin/command-chat.ts';
@@ -127,7 +127,8 @@ export function apply(ctx: any): void {
     // 惰性取用：handlePetRoute 在下方装配，Helper 只在启动/收请求时才真正调用它
     getHandlePetRoute: () => httpRoute.handlePetRoute,
   });
-  const { startHelper, stopHelper, markDisposed } = desktopHelper;
+  // startHelper 不再取用：插件是纯数据通道，桌面 Helper 只由独立版自己拉起。
+  const { stopHelper, markDisposed } = desktopHelper;
 
   // 内置语音实现与第三方走同一条注册路径：先登记，两个服务才解析得到各自的实现。
   // 识别那侧惰性依赖宿主服务，没装语音输入插件也能登记——调用时才回 unsupported。
@@ -222,7 +223,8 @@ export function apply(ctx: any): void {
   registerHttpRoute(ctx, httpRoute.handlePetRoute);
 
   // 公布宿主入口：DSH 端口每次启动随机，独立桌宠靠这份描述文件发现本宿主（见 plugin/bridge-descriptor）。
-  announceDshBridge({ ctx, userRoot, log });
+  // 文件落在机器级共享桥目录：插件与应用各有自己的数据根，只有这里是两边都认的地址。
+  announceDshBridge({ ctx, userRoot: bridgeDir(), log });
 
   registerSessionWatch({
     ctx,
@@ -242,6 +244,10 @@ export function apply(ctx: any): void {
 
   registerBalanceCommand({ ctx, effectivePetList, refreshBalance, sleep, sleepRefusalText });
 
+  // 数据通道模式：插件在 DSH 里跑时只产出数据（余额/工作状态/通知），不生成碎碎念——
+  // 文案与语音归独立版所有，否则两边各生成一份、语音各念一遍。独立版（exe / CLI）由自己生成。
+  const dataChannelOnly = process.env.DSH_PET_APP_MODE !== '1' && process.env.DSH_PET_IN_PROCESS !== '1';
+
   registerLoops({
     ctx,
     balancePeriodSec,
@@ -254,6 +260,7 @@ export function apply(ctx: any): void {
     refreshBalance,
     sleep,
     standaloneAiPolicy,
+    whisperDisabled: dataChannelOnly,
     whisperPeriodSec,
   });
 
@@ -286,15 +293,7 @@ export function apply(ctx: any): void {
     stopWorkStatusFlush,
   });
 
-  // 路由就绪后拉起桌面 Helper（Electron 缺失时仅告警，不影响 DSH 与浏览器 overlay）。
-  // 独立桌宠正在渲染时只当数据源：再拉一套 Helper 会出现第二只宠物、两套托盘、两份碰撞物理。
-  // 页面内 overlay 不受影响（那是浏览器里画的，不属于桌面 Helper）。
-  // 进程内宿主（独立 exe / CLI）自己先写了心跳再 apply，读到自己不算「另一只在跑」。
-  if (isStandaloneAppRunning(userRoot, { ignorePid: process.pid })) {
-    log.info(
-      '[dsh-pet] 检测到独立桌宠在运行：本宿主只提供会话数据，不拉起桌面 Helper（页面内 overlay 不受影响）',
-    );
-  } else {
-    startHelper();
-  }
+  // 插件在 DSH 里只当数据通道：不再拉起桌面 Helper、也不在页面里画宠物。
+  // 要显示宠物请装独立版（exe）；它通过本插件公布的本机 HTTP 接口读余额/工作状态/通知。
+  // 这样同一份代码在两边跑也不会出现两只宠物、两套托盘或两份语音。
 }

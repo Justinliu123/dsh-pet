@@ -14,6 +14,7 @@ import { listCatalog, registerVoiceProvider } from '../voice/registry.ts';
 import { listSpeechCatalog, registerSpeechProvider } from '../voice/speech-registry.ts';
 import { listChatMemoryProviders, registerChatMemoryProvider } from '../chat-memory-provider.ts';
 import { migrateUserConfig, type ConfigPaths } from '../config.ts';
+import { petDataRoot } from '../data-paths.ts';
 import { createFileLogger, isFileLogger, setDefaultLogger, type FileLogger, type LoggerLike } from '../log-file.ts';
 import { MenuRegistry } from '../menu.ts';
 import { PACKAGE_MEMES_DIR, PACKAGE_ROOT } from '../paths.ts';
@@ -90,7 +91,8 @@ export function createHostSetup(ctx: HostSetupContext): HostSetup {
   // 用户数据根：配置与用户素材统一收敛于此（扩展包按 <插件id> 各自建目录）
   const dshHome = resolveDshHome();
 
-  const userRoot = join(dshHome, 'dsh-pet');
+  // 数据根：独立应用会在启动前把便携数据根写进 DSH_PET_DATA_ROOT；插件不设，回落到 DSH 数据根下。
+  const userRoot = petDataRoot(dshHome);
 
   // 统一日志出口（单文件、按大小截断，见 ./log-file）：桌面版 DSH 没有控制台，ctx.logger 只写
   // stdout 等于把排障信息丢掉；base 保留终端输出。
