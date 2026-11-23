@@ -126,6 +126,7 @@ function harness(extra: Partial<DragCard> = {}) {
   const calls = {
     stopFlight: 0,
     stopAutonomy: 0,
+    abandonLean: 0,
     releaseLock: 0,
     plays: [] as string[],
     flights: [] as Array<{ px: number; py: number; vx: number; vy: number }>,
@@ -156,6 +157,9 @@ function harness(extra: Partial<DragCard> = {}) {
     resumeWork: () => false,
     stopAutonomy: () => {
       calls.stopAutonomy++;
+    },
+    abandonLean: () => {
+      calls.abandonLean++;
     },
     stopFlight: () => {
       calls.stopFlight++;
@@ -235,6 +239,30 @@ describe('createDrag —— 按下与阈值', () => {
       drag.onPointerDown(pointer(el, 500, 350));
       drag.onPointerMove(pointer(el, 502, 351));
       assert.deepEqual(calls.plays, []);
+    } finally {
+      frames.restore();
+    }
+  });
+
+  test('未超过阈值的移动：不放弃靠边（只是点一下，该走「松手站直」）', () => {
+    const frames = withFakeFrames();
+    try {
+      const { drag, el, calls } = harness();
+      drag.onPointerDown(pointer(el, 500, 350));
+      drag.onPointerMove(pointer(el, 502, 351));
+      assert.equal(calls.abandonLean, 0);
+    } finally {
+      frames.restore();
+    }
+  });
+
+  test('拖起来了：放弃靠边一次', () => {
+    const frames = withFakeFrames();
+    try {
+      const { drag, el, calls } = harness();
+      drag.onPointerDown(pointer(el, 500, 350));
+      drag.onPointerMove(pointer(el, 540, 350));
+      assert.equal(calls.abandonLean, 1);
     } finally {
       frames.restore();
     }

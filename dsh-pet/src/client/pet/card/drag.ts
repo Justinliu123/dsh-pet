@@ -83,6 +83,7 @@ export function createCardDrag(rt: CardDragRuntime) {
         },
         resumeWork: () => live.current.flow?.resumeWorkStatusAnim() ?? false,
         stopAutonomy: () => motion.stopMove(),
+        abandonLean: () => live.current.flow?.leanAbandon(),
         stopFlight: () => motion.flight.stop(),
         startFlight: motion.startThrow,
         isFrozen: () => live.current.ownAnim.isFrozen(),

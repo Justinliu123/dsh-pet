@@ -1,0 +1,8 @@
+{
+  "靠边-开始-右": { "measure": "head" },
+  "靠边-循环-右": { "reference": "靠边-开始-右", "measure": "head" },
+  "靠边-结束-右": { "reference": "靠边-开始-右", "measure": "head" },
+  "靠边-开始-左": { "measure": "head" },
+  "靠边-循环-左": { "reference": "靠边-开始-左", "measure": "head" },
+  "靠边-结束-左": { "reference": "靠边-开始-左", "measure": "head" }
+}

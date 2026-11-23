@@ -9,6 +9,7 @@ import { pick, pickSlot, rollKind } from '../../../shared/pickers.ts';
 import type { SleepState } from '../../../shared/state.ts';
 import { WORK_STATUS_INDEX } from '../../../shared/work-status.ts';
 import { decideNextAnimation } from '../animation/next-animation.ts';
+import { createLeanMachine, type LeanSideName } from './lean-machine.ts';
 import { createSleepMachine } from './sleep-machine.ts';
 import type { CardHub } from './hub.ts';
 import type { EndedCue } from '../animation/cues.ts';
@@ -31,6 +32,14 @@ export interface AnimationFlow {
   sleeping(): boolean;
   /** 当前睡觉阶段；醒着为 null。点击路径要区分「入睡过渡」与「真睡着」。 */
   sleepPhase(): 'start' | 'loop' | 'end' | null;
+  /** 进入靠边停靠：播扒边过渡段（到位那一刻调用）。 */
+  leanEnter(side: LeanSideName): void;
+  /** 离开靠边停靠：播离开段，播完回随机链。没在靠边时返回 false。 */
+  leanExit(): boolean;
+  /** 放弃靠边（被拖走之类）：清掉状态但不播动画。 */
+  leanAbandon(): void;
+  /** 此刻是否在靠边（含扒边与离开两段过渡）。 */
+  leaning(): boolean;
 }
 
 /** 注入的 react 能力。 */
@@ -73,6 +82,27 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
     const sleepPhase = (): 'start' | 'loop' | 'end' | null => sleep().phase();
     /** 应用宿主写的睡觉状态（转发给状态机）。 */
     const applySleep = (state: SleepState): void => sleep().apply(state);
+
+    // 靠边停靠也是独立状态机：与睡觉同一套三段推进（扒边 → 保持 → 离开）。
+    const leanRef = useRef<ReturnType<typeof createLeanMachine> | null>(null);
+    const lean = (): ReturnType<typeof createLeanMachine> =>
+      (leanRef.current ??= createLeanMachine(hub, pickNext, log));
+    /** 此刻是否在靠边（含两段过渡）。 */
+    const leaning = (): boolean => lean().leaning();
+    /** 进入靠边：按配置取那一侧的三段名；没配这一侧就不进。 */
+    const leanEnter = (side: LeanSideName): void => {
+      const set = hub.anims().lean?.[side];
+      if (!set) return;
+      lean().enter(side, set);
+    };
+    /** 离开靠边：播离开段，播完回随机链。没在靠边时返回 false。 */
+    const leanExit = (): boolean => {
+      if (!leaning()) return false;
+      lean().exit();
+      return true;
+    };
+    /** 放弃靠边（被拖走之类）：清掉状态但不播动画。 */
+    const leanAbandon = (): void => lean().abandon();
     /** 非终态工作状态回到档位循环；冻结、空闲与终态都返回 false。 */
     const resumeWorkStatusAnim = (): boolean => {
       const card = hub.card;
@@ -102,9 +132,13 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
       if (hub.ownAnim.isFrozen()) return;
       // 睡觉：随机链彻底停住（不掷骰、不转向、不走位），醒来由 applySleep 的 end 段收尾
       if (sleeping()) return;
+      // 靠边：随机链同样停住。保持段是无限播，靠边只能由点击/唤醒这类显式交互结束。
+      if (leaning()) return;
       const roll = Math.random();
       // 宠物固定时，掷骰把「转向/移动」权重按 0 算；菜单点播与显式点播不走这里。
       const kind = rollKind(roll, hub.cfg().animationWeights, { fixed: hub.cfg().fixedEnabled });
+      // 先试靠边走位：冲屏幕边线走一趟，走到就扒边常驻。走不到（离边太远或已经贴着边）才照常走位。
+      if (kind === 'move' && hub.tryLean()) return;
       // 只有掷到 move 档才试走位：占用中返回 true（已有移动在跑），无法移动返回 false。
       const move = kind === 'move' ? hub.tryWalk() : undefined;
       const decision = decideNextAnimation({
@@ -133,6 +167,8 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
     /** 按播完判定改状态。 */
     const applyEndedCue = (cue: EndedCue): void => {
       const card = hub.card;
+      // 靠边的三段推进与「站直后回随机链」都在状态机里：它说这次 ended 归它管就直接返回。
+      if (lean().consumeEnded()) return;
       // 睡觉的三段推进与「起来播完回随机链」都在状态机里：它说这次 ended 归它管就直接返回。
       if (sleep().consumeEnded()) return;
       if (cue.kind === 'ignore') return;
@@ -198,6 +234,18 @@ export function createAnimationFlow(rt: AnimationFlowRuntime) {
       hub.bubbles.showWhisper(text, { image, url }, duration);
     };
 
-    return { applyEndedCue, applySleep, pickNext, resumeWorkStatusAnim, sleepPhase, sleeping, speak };
+    return {
+      applyEndedCue,
+      applySleep,
+      leanAbandon,
+      leanEnter,
+      leanExit,
+      leaning,
+      pickNext,
+      resumeWorkStatusAnim,
+      sleepPhase,
+      sleeping,
+      speak,
+    };
   };
 }

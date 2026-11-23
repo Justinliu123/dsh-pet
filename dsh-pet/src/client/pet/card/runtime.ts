@@ -6,6 +6,7 @@
  * @module dsh-pet/src/client/pet/card/runtime
  */
 import { pick } from '../../../shared/pickers.ts';
+import { planLeanCandidates } from '../../../shared/motion.ts';
 import { postAction } from '../../../shared/state.ts';
 import { ROUTE_PATH } from '../../../shared/constants.ts';
 import { resolveFontPx } from '../../../shared/fonts.ts';
@@ -26,6 +27,7 @@ import { createCardMotion } from './motion.ts';
 import { createCardState } from './state.ts';
 import { createCueEffects } from './cue-effects.ts';
 import { createLockFreeze } from './lock-freeze.ts';
+import { notifyPetClicked } from './pet-click.ts';
 import type { CardHub } from './hub.ts';
 import type { CardLive } from './live.ts';
 import type { CardViewProps } from './view.ts';
@@ -270,10 +272,32 @@ export function createCardRuntime(rt: PetRuntime) {
       speak: (text, image, url, duration, anim) => liveRef.current.flow?.speak(text, image, url, duration, anim),
       // 睡觉是状态不是指令：自动来源（工作状态/余额/碎碎念）读它决定要不要闭嘴
       sleeping: () => liveRef.current.flow?.sleeping() ?? false,
+      // 靠边同理：随机链读它决定要不要停住
+      leaning: () => liveRef.current.flow?.leaning() ?? false,
       // 占用锁：锁的语义是把控制权交给第三方，睡觉的菜单闸门与自动化闸门都对持锁者让路
       locked: () => ownAnim.isFrozen(),
       stopMotion: motion.stopMove,
       tryWalk: motion.walk.tryMove,
+      // 靠边走位：挑离得更近的那一侧，冲屏幕边线走一趟。走不到（离边太远或已经贴着边）返回 false。
+      tryLean: () => {
+        const metrics = motion.metrics();
+        const candidates = planLeanCandidates(cfgRef.current.animations.lean, {
+          W: window.innerWidth,
+          size: metrics.size,
+          sideAllow: metrics.sideAllow,
+          centerX: motion.center().x,
+        });
+        for (const candidate of candidates) {
+          const result = motion.walk.tryLean(
+            { moves: cfgRef.current.animations.moves, side: candidate.side, anchorX: candidate.anchorX },
+            // 到位那一刻就是「手扒在屏幕边线上」的时刻：这一刻才切进扒边段。
+            () => liveRef.current.flow?.leanEnter(candidate.side),
+          );
+          // true = 走位被占用（宠物正忙），字符串 = 这次靠边走位已经发起。
+          if (result !== false) return result;
+        }
+        return false;
+      },
     };
     // 七条指令的分派在 cue-effects：这里只把当拍 props 交过去。
     useCueEffects(hub, props);
@@ -320,6 +344,13 @@ export function createCardRuntime(rt: PetRuntime) {
         }
         // 入睡过渡里被点：这次入睡作废，按普通点击处理（挤压 + 音效 + 点击回应），不再播「起来」
         if (phase === 'start') void postAction(ROUTE_PATH + '/wake?pet=' + encodeURIComponent(cfg.id));
+        // 靠边停靠：点一下 = 松手站直（播离开段，播完回随机链）。
+        // 不走点击回应动画：那一段会顶掉离开段，宠物就站不直了。
+        if (liveRef.current.flow?.leanExit() ?? false) {
+          playClickSound();
+          notifyPetClicked();
+          return;
+        }
         drag.onClick();
       },
       onContextMenu: entry.handleContextMenu,

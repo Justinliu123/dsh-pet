@@ -7,7 +7,7 @@
  */
 import { randomBetween } from './pickers.ts';
 import { rectAtPoint, rectBottom, rectRight } from './displays.ts';
-import type { Corner, Rect } from './types.ts';
+import type { Corner, LeanConfig, Rect } from './types.ts';
 
 /** 一次移动的几何参数（比例坐标）。 */
 export interface MovePlan {
@@ -36,9 +36,30 @@ export const planMove = (o: {
   /** 可选：显示器工作区列表（与 cx/cy 同坐标系）。给了就按并集判定落点可达性 */
   areas?: Rect[];
 }): MovePlan | null => {
-  const side = o.sideAllow ?? 0;
   const distance = randomBetween(o.minDist, o.maxDist);
   const target = o.cx + o.dir * distance;
+  return planMoveToTarget({ ...o, target });
+};
+
+/** 走到指定的横向落点：落点越出边界（含边距）时返回 null。
+ *  与 {@link planMove} 的区别只是落点不随机——靠边停靠要精确停在「手正好落在屏幕边线」的位置，
+ *  随机距离落不到那个点上。边界判定与 planMove 完全一致（同一份口径，不各写一套）。 */
+export const planMoveToTarget = (o: {
+  cx: number;
+  cy: number;
+  W: number;
+  H: number;
+  /** 目标中心横坐标（px，与 cx 同一坐标系）。 */
+  target: number;
+  margin: number;
+  halfW: number;
+  /** 可选：身体相对视频盒左/右各留多少像素（默认 0 = 按视频盒贴边） */
+  sideAllow?: number;
+  /** 可选：显示器工作区列表（与 cx/cy 同坐标系） */
+  areas?: Rect[];
+}): MovePlan | null => {
+  const side = o.sideAllow ?? 0;
+  const target = o.target;
   if (o.areas && o.areas.length > 0) {
     // 身体左右缘各外扩 margin 后都得落在某块屏上（可以分属不同屏 = 允许骑缝行走）
     const bodyHalf = o.halfW - side;
@@ -56,6 +77,75 @@ export const planMove = (o: {
     targetRatio: target / o.W,
     totalRatio: Math.abs(target - o.cx) / o.W,
   };
+};
+
+/** 靠边停靠的落点（宠物盒中心，px）：让「扒住的那条竖线」正好落在屏幕边线上。
+ *
+ *  竖线在画幅里的横向位置由素材决定（anchorX = 手落在画幅宽的哪个比例），所以
+ *  盒左缘 = 屏幕边线 - anchorX×盒宽，盒中心 = 盒左缘 + 盒宽/2。
+ *  边界判定比普通走位松一档：靠边时身体允许略微探出屏幕（那正是「藏在屏幕边后面」的观感），
+ *  只要求身体还有大半留在屏内——整个跑出去就看不见了，那才是真越界。
+ */
+export const planLeanSpot = (o: {
+  /** 视口宽（px）。 */
+  W: number;
+  /** 宠物盒宽（px）。 */
+  size: number;
+  /** 身体相对盒左右各留多少透明边（px）。 */
+  sideAllow: number;
+  /** 竖线在画幅里的横向位置（0~1）。 */
+  anchorX: number;
+  /** 靠哪一侧的边。 */
+  side: 'left' | 'right';
+}): number | null => {
+  const boxLeft = o.side === 'right' ? o.W - o.anchorX * o.size : -o.anchorX * o.size;
+  const center = boxLeft + o.size / 2;
+  // 身体左右缘：靠边允许探出，但至少要有一半留在屏内，否则宠物整个消失。
+  const bodyLeft = boxLeft + o.sideAllow;
+  const bodyRight = boxLeft + o.size - o.sideAllow;
+  const bodyWidth = o.size - 2 * o.sideAllow;
+  const visible = o.side === 'right' ? o.W - bodyLeft : bodyRight;
+  if (visible < bodyWidth / 2) return null;
+  return center;
+};
+
+/** 一个靠边候选：靠哪一侧、扒在哪、落点在视口里的横坐标（px）。 */
+export interface LeanCandidate {
+  /** 靠哪一侧的边。 */
+  side: 'left' | 'right';
+  /** 扒的那条竖线在画幅里的横向位置（0~1）。 */
+  anchorX: number;
+  /** 落点：宠物盒中心的视口横坐标（px）。 */
+  target: number;
+}
+
+/**
+ * 挑出可用的靠边候选，按「离得更近」排序。
+ *
+ * @param lean - 配置里的靠边段；没写、或两侧都没配素材时返回空数组。
+ * @param input - 当帧几何与当前位置。
+ * @returns 候选列表，最近的一侧在前；算不出落点（身体会整个跑出屏幕）的一侧不出现。
+ */
+export const planLeanCandidates = (
+  lean: LeanConfig | undefined,
+  input: { W: number; size: number; sideAllow: number; centerX: number },
+): LeanCandidate[] => {
+  if (!lean) return [];
+  const candidates: LeanCandidate[] = [];
+  for (const side of ['right', 'left'] as const) {
+    const set = lean[side];
+    if (!set) continue;
+    const target = planLeanSpot({
+      W: input.W,
+      size: input.size,
+      sideAllow: input.sideAllow,
+      anchorX: set.anchorX,
+      side,
+    });
+    if (target === null) continue;
+    candidates.push({ side, anchorX: set.anchorX, target });
+  }
+  return candidates.sort((a, b) => Math.abs(a.target - input.centerX) - Math.abs(b.target - input.centerX));
 };
 
 /**

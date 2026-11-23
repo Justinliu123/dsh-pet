@@ -42,7 +42,7 @@ DSH 设置 → 「桌宠配置」：
 | 字段                   | 作用                                                                                                                            | 格式与默认一致即可         |
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
 | `pets`                 | 宠物列表（大小/位置/多开/余额开关）                                                                                             | 数组，每项同 `pets[]` 结构 |
-| `animations`           | **动画池**：idle / turn / drag / clicks / moves / categories / events（余额等事件动画）/ sleep（睡觉套，可选）                  | 同 `animations` 结构       |
+| `animations`           | **动画池**：idle / turn / drag / clicks / moves / categories / events（余额等事件动画）/ sleep（睡觉套，可选）/ lean（靠边停靠，可选） | 同 `animations` 结构       |
 | `animationWeights`     | 动画链播放权重（idle / turn / move）                                                                                            | 同 `animationWeights` 结构 |
 | `eventsRefreshSec`     | 事件刷新周期（秒）：`whisper` 碎碎念、`sleepTalk` 梦话、`balance` 余额                                                          | 同 `eventsRefreshSec` 结构 |
 | `sleepStartTexts`      | **入睡台词**（条目级，随机挑一句；播「开始」时弹气泡）                                                                          | 非空字符串数组             |

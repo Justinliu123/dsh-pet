@@ -40,12 +40,16 @@ export interface CardHub {
   applyThrow(angleDeg: number, power: number): void;
   /** 试发起一次自主走位：占用中返回 true，无法移动返回 false，成功返回动作名。 */
   tryWalk(): boolean | string;
+  /** 试发起一次靠边走位（冲屏幕边线走一趟）：占用中返回 true，走不到返回 false，成功返回动作名。 */
+  tryLean(): boolean | string;
   /** 依据名点播。 */
   playByName: PlayByName;
   /** 说一句。 */
   speak: Speak;
   /** 此刻是否在睡（含入睡/醒来两段过渡）：自动来源据此闭嘴，显式唤醒走菜单或点击。 */
   sleeping(): boolean;
+  /** 此刻是否在靠边（含扒边与离开两段过渡）：随机链据此停住。 */
+  leaning(): boolean;
   /** 此刻是否被占用锁冻结：锁的语义是「把控制权交给第三方」，睡觉闸门对它让路。 */
   locked(): boolean;
 }

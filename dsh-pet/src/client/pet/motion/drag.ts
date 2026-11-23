@@ -82,6 +82,8 @@ export interface DragCard {
   resumeWork: () => boolean;
   /** 停走位与位置跟随。 */
   stopAutonomy: () => void;
+  /** 放弃靠边：宠物被拖离屏幕边线，扒边状态就此作废（不播站直段——它已经不在边上了）。 */
+  abandonLean: () => void;
   /** 停飞。 */
   stopFlight: () => void;
   /** 起飞。 */
@@ -317,6 +319,8 @@ export function createDrag(card: () => DragCard): Drag {
     if (!press.dragging) {
       if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
       press.dragging = true;
+      // 真的拖起来了才放弃靠边：只是点一下的话，那一下该走「松手站直」，不是拖走。
+      c.abandonLean();
       c.setOnce(true);
       if (c.dragAnims.length) {
         const name = pick(c.dragAnims);

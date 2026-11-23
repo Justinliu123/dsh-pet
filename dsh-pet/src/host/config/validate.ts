@@ -58,9 +58,35 @@ function animationsValid(a: unknown): boolean {
   // baifan 可选：没写 = 该条目没有这个玩法。写了才校验形状——槽位数不对会让玩法
   // 按位置取到 undefined，表现成「点了没反应」，比不配更难解释。
   if (anims.baifan !== undefined && !activitySlotsValid(anims.baifan)) return false;
+  // lean 可选：左右两侧各写各的素材，没写的一侧就靠不了那侧边。
+  if (anims.lean !== undefined && !leanValid(anims.lean)) return false;
   // sleep 可选：pet pack 不写也合法（不同角色的睡觉素材不一样，不能强求）。
   // 写了才校验形状——一个空套或空段会让状态机「进去了但没动画播」，比不配更难解释。
   return anims.sleep === undefined || sleepValid(anims.sleep);
+}
+
+/** lean 段校验：左右两侧各自可选；写了的一侧必须三段都是非空动画名数组，
+ *  且 anchorX 是 0~1 之间的有限数（扒的那条竖线在画幅里的横向位置）。
+ *  未写由调用方放行（可选字段）；这里只处理「写了」的形态。 */
+function leanValid(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const cfg = value as Record<string, unknown>;
+  for (const side of ['right', 'left']) {
+    const entry = cfg[side];
+    if (entry === undefined) continue;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+    const set = entry as Record<string, unknown>;
+    for (const phase of ['start', 'loop', 'end']) {
+      const pool = set[phase];
+      if (!Array.isArray(pool) || pool.length === 0) return false;
+      for (const name of pool) {
+        if (typeof name !== 'string' || name.length === 0) return false;
+      }
+    }
+    const anchor = set.anchorX;
+    if (typeof anchor !== 'number' || !Number.isFinite(anchor) || anchor <= 0 || anchor >= 1) return false;
+  }
+  return true;
 }
 
 /** sleep 段校验：非空套数组，每套都必须有非空的 start / loop / end 字符串数组。
@@ -176,6 +202,7 @@ export function bubbleTemplateValid(value: unknown): boolean {
     if (item.align !== undefined && !BUBBLE_ROW_ALIGNS.includes(item.align as (typeof BUBBLE_ROW_ALIGNS)[number]))
       return false;
     if (item.bold !== undefined && typeof item.bold !== 'boolean') return false;
+    if (item.tierColor !== undefined && typeof item.tierColor !== 'boolean') return false;
   }
   return true;
 }
@@ -191,7 +218,6 @@ export function bubbleRowsValid(value: unknown): boolean {
     if (item.size !== undefined && (typeof item.size !== 'number' || !Number.isFinite(item.size) || item.size < 8 || item.size > 48)) return false;
     if (item.align !== undefined && (typeof item.align !== 'string' || !BUBBLE_ROW_ALIGNS.includes(item.align as 'left' | 'center' | 'right'))) return false;
     if (item.bold !== undefined && typeof item.bold !== 'boolean') return false;
-    if (item.tierColor !== undefined && typeof item.tierColor !== 'boolean') return false;
   }
   return true;
 }

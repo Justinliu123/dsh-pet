@@ -5,7 +5,7 @@
  * 不变量：同一时刻最多一条走位在跑；停走必须取消在跑的帧并作废已排队的动作。
  * @module dsh-pet/src/client/pet/motion/walk
  */
-import { planMoveAction, type PendingMove } from './move-action.ts';
+import { planMoveAction, planLeanMove, type LeanRequest, type PendingMove } from './move-action.ts';
 import type { BoxPoint } from './geometry.ts';
 import type { MovesConfig } from '../../../shared/types.ts';
 
@@ -45,6 +45,12 @@ export interface WalkDeps {
   commit(center: { rx: number; ry: number }): void;
 }
 
+/** 已规划、等待视频就绪的走位。 */
+interface PendingWalk extends PendingMove {
+  /** 到位回调：走完这一刻才触发（靠边停靠：到位即进入扒边段）。 */
+  onArrive?: () => void;
+}
+
 /** 走位驱动：一个宠物一个实例。 */
 export interface Walk {
   /** 是否有排队的动作；视频就绪时据此决定要不要开跑。 */
@@ -53,6 +59,9 @@ export interface Walk {
   start(el: HTMLVideoElement): void;
   /** 尝试发起一次走位：占用中返回 `true`，无法移动返回 `false`，成功返回动作名。 */
   tryMove(preferredName?: string): boolean | string;
+  /** 冲着屏幕边线走一趟（靠边停靠）：占用中返回 `true`，走不到返回 `false`，成功返回动作名。
+   *  走完到位时触发 `onArrive`——那一刻就是「手扒在屏幕边线上」的时刻。 */
+  tryLean(request: LeanRequest, onArrive: () => void): boolean | string;
   /** 停走：作废已排队的动作并取消在跑的帧。 */
   stop(): void;
 }
@@ -72,7 +81,7 @@ export function createWalk(deps: WalkDeps): Walk {
   /** 世代号：开跑或停走 +1，迟到的帧据此自弃。 */
   let token = 0;
   /** 已规划、等待视频就绪的走位。 */
-  let pending: PendingMove | null = null;
+  let pending: PendingWalk | null = null;
 
   const hasPending = (): boolean => pending !== null;
 
@@ -108,6 +117,9 @@ export function createWalk(deps: WalkDeps): Walk {
       else {
         frame = null;
         deps.commit({ rx: move.targetRatio, ry: move.startYRatio });
+        // 到位回调在提交之后触发：位置先落定，再进下一段（靠边停靠靠它接扒边段）。
+        const arrive = move.onArrive;
+        if (arrive) arrive();
       }
     };
     frame = requestAnimationFrame(step);
@@ -134,6 +146,24 @@ export function createWalk(deps: WalkDeps): Walk {
     return action.anim;
   };
 
+  const tryLean = (request: LeanRequest, onArrive: () => void): boolean | string => {
+    // 占用中返回 true：调用方据此知道宠物没空，不必再挑原地动作。
+    if (frame !== null || pending !== null || deps.isFlying()) return true;
+    const metrics = deps.metrics();
+    const action = planLeanMove({
+      ...request,
+      size: metrics.size,
+      center: deps.center(),
+      viewport: deps.viewport(),
+      halfW: metrics.halfW,
+      sideAllow: metrics.sideAllow,
+    });
+    if (action === null) return false;
+    pending = { ...action.pending, onArrive };
+    deps.play(action.anim);
+    return action.anim;
+  };
+
   const stop = (): void => {
     pending = null;
     token++;
@@ -143,5 +173,5 @@ export function createWalk(deps: WalkDeps): Walk {
     }
   };
 
-  return { hasPending, start, stop, tryMove };
+  return { hasPending, start, stop, tryLean, tryMove };
 }

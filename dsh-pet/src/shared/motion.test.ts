@@ -1,12 +1,13 @@
 /**
- * 窗口落位测试：本体贴屏幕边时，窗口被窗口管理器钳回工作区后，本体如何靠窗口内偏移补回来。
+ * 窗口落位与靠边落位测试：本体贴屏幕边时，窗口被窗口管理器钳回工作区后，本体如何靠窗口内偏移补回来；
+ * 靠边停靠时，「扒住的那条竖线」如何正好压在屏幕边线上。
  *
  * 尺寸取 issue #274 的实测配置：宠物 size 440（本体 440×247.5），窗口 = 本体 + 左右下各 220、
  * 上 294（气泡/待办面板高度），工作区 1920×1040（1920×1080 减 40px 任务栏）。
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { anchorPixel, fitWindowInArea } from './motion.ts';
+import { anchorPixel, fitWindowInArea, planLeanCandidates, planLeanSpot } from './motion.ts';
 
 /** 实测窗口尺寸：左右余量 0.5×size，上余量取气泡/待办面板高度的最大值。 */
 const WINDOW = { width: 880, height: 782 };
@@ -122,5 +123,54 @@ describe('fitWindowInArea —— 与角落定位拼起来的端到端落点', ()
     const fit = fitOf(body.x, body.y, { area: AREA });
     assert.equal(fit.x + fit.offsetX, 1456, '右：1920 − 440 − 24 = 1456');
     assert.equal(fit.y + fit.offsetY, 782.5, '底：1040 − 247.5 − 10 = 782.5');
+  });
+});
+
+/** 靠边停靠用的基准尺寸：宠物盒宽 462px，透明边余量取站立命中区（左右各 0.3125×宽）。 */
+const LEAN = { W: 1920, size: 462, sideAllow: 0.3125 * 462 };
+
+describe('planLeanSpot —— 靠边落点', () => {
+  test('靠右边：站立剪影的右缘正好压在屏幕右边线上', () => {
+    const target = planLeanSpot({ ...LEAN, anchorX: 0.666, side: 'right' });
+    assert.ok(target !== null);
+    // 盒左缘 = 落点 − 盒宽/2；竖线在盒内的位置 = 盒左缘 + anchorX×盒宽
+    const boxLeft = target - LEAN.size / 2;
+    assert.ok(Math.abs(boxLeft + 0.666 * LEAN.size - LEAN.W) < 1e-6, '竖线必须落在右边线上');
+  });
+
+  test('靠左边：站立剪影的左缘正好压在屏幕左边线上', () => {
+    const target = planLeanSpot({ ...LEAN, anchorX: 0.334, side: 'left' });
+    assert.ok(target !== null);
+    const boxLeft = target - LEAN.size / 2;
+    assert.ok(Math.abs(boxLeft + 0.334 * LEAN.size) < 1e-6, '竖线必须落在左边线上');
+  });
+
+  test('身体整个跑出屏幕：返回 null（宠物会从屏幕里消失）', () => {
+    // 竖线贴着画幅最左，盒几乎整个在屏幕外 → 身体全在屏外。
+    assert.equal(planLeanSpot({ ...LEAN, anchorX: 0.02, side: 'right' }), null);
+  });
+});
+
+describe('planLeanCandidates —— 靠边候选挑选', () => {
+  const both = {
+    right: { start: [], loop: [], end: [], anchorX: 0.666 },
+    left: { start: [], loop: [], end: [], anchorX: 0.334 },
+  };
+
+  test('没配靠边：没有候选', () => {
+    assert.deepEqual(planLeanCandidates(undefined, { ...LEAN, centerX: 960 }), []);
+  });
+
+  test('两侧都配：按「离得更近」排序', () => {
+    const nearRight = planLeanCandidates(both, { ...LEAN, centerX: 1300 });
+    assert.equal(nearRight[0].side, 'right');
+    const nearLeft = planLeanCandidates(both, { ...LEAN, centerX: 300 });
+    assert.equal(nearLeft[0].side, 'left');
+  });
+
+  test('只配了一侧：候选里只有那一侧', () => {
+    const candidates = planLeanCandidates({ right: both.right }, { ...LEAN, centerX: 300 });
+    assert.equal(candidates.length, 1);
+    assert.equal(candidates[0].side, 'right');
   });
 });

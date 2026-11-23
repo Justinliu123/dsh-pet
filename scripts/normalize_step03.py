@@ -5,6 +5,11 @@
 - 水平居中，脚底对齐（按全帧内容最低点对齐，保证动画不裁剪）
 - 不裁剪人物/动作内容，底部超出的透明空白直接裁掉
 - 画布 2160x1215 与原始视频同为 16:9，宽度容纳最宽动作（2015px）
+
+「靠边」系列（首尾姿态不同的动作）走 scripts/normalize_overrides.json 覆盖：
+默认拿首尾两端的帧一起量站立基准，而「靠边-开始」尾帧是扒边姿态、「靠边-循环」整段都是扒边姿态，
+量出来的基准会歪（角色被拉回画幅中间、手也就抓不到边缘）。覆盖项让这几段统一用
+「靠边-开始」首帧那套站立基准，缩放与水平落位三段完全一致，段与段之间才不会跳位。
 """
 
 from __future__ import annotations
@@ -35,6 +40,8 @@ SRC_H = 720
 FPS = 24
 HEAD_FRAMES = 5
 TAIL_SEEK = -0.2  # 从末尾取帧，避免取到收尾动作
+# 站立基准的逐素材覆盖项（见模块头）：靠边系列用它对齐三段的落位。
+OVERRIDES = Path(__file__).resolve().parent / "normalize_overrides.json"
 
 _BBOX_RE = re.compile(r"x1:(\d+) x2:(\d+) y1:(\d+) y2:(\d+)")
 
@@ -82,13 +89,21 @@ def read_alpha_frames(video: Path, seek: float | None = None, frames: int | None
     return out
 
 
-def measure_standing(video: Path) -> dict:
-    """首尾各 HEAD_FRAMES 帧站立姿态。
+def measure_standing(video: Path, mode: str = "head-tail") -> dict:
+    """站立姿态的测量基准。
+
+    mode:
+      head-tail（默认）——首尾各 HEAD_FRAMES 帧一起算（库内绝大多数动作首尾都是站立）
+      head / tail——只取首侧或尾侧那一段（首尾姿态不同的动作用，比如「靠边」系列）
 
     水平中心用非透明像素 x 的中位数（防手/零食等扩展物把 bbox 中心拉偏），
     垂直基准用 bbox（y 方向扩展物干扰小，bbox 本身可靠）。
     """
-    alphas = read_alpha_frames(video, frames=HEAD_FRAMES) + read_alpha_frames(video, seek=TAIL_SEEK, frames=HEAD_FRAMES)
+    alphas: list[np.ndarray] = []
+    if mode in ("head-tail", "head"):
+        alphas += read_alpha_frames(video, frames=HEAD_FRAMES)
+    if mode in ("head-tail", "tail"):
+        alphas += read_alpha_frames(video, seek=TAIL_SEEK, frames=HEAD_FRAMES)
     med_xs, heights, max_ys = [], [], []
     for a in alphas:
         ys, xs = np.where(a > 10)
@@ -119,11 +134,15 @@ def measure_content_union(video: Path) -> tuple[int, int, int, int]:
     )
 
 
-def build_filter(scale: float, standing: dict) -> str:
-    """整帧缩放 + overlay 平移到透明画布，站立水平居中、脚底对齐 FEET_Y。"""
+def build_filter(scale: float, standing: dict, center_x: float) -> str:
+    """整帧缩放 + overlay 平移到透明画布，站立水平居中、脚底对齐 FEET_Y。
+
+    center_x 单独传进来：靠边系列的水平基准来自覆盖项（另一个素材量出来的站立中心），
+    不能用本段自己量出来的尾帧中位数。
+    """
     scaled_w = int(SRC_W * scale) // 2 * 2
     scaled_h = int(SRC_H * scale) // 2 * 2
-    overlay_x = CANVAS_W / 2 - standing["center_x"] * scale
+    overlay_x = CANVAS_W / 2 - center_x * scale
     overlay_y = FEET_Y - standing["max_y"] * scale
     return (
         f"color=c=black@0:s={CANVAS_W}x{CANVAS_H}:r={FPS}[bg];"
@@ -183,7 +202,21 @@ def _is_valid(dst: Path, src: Path, min_size: int = 50_000) -> bool:
     return bool(r.stdout.strip())
 
 
-def _process_one(video: Path) -> tuple[dict, bool]:
+def load_overrides() -> dict[str, dict]:
+    """读 scripts/normalize_overrides.json：按素材名覆盖「站立基准」的取法。
+
+    键是素材名（不含扩展名），值支持这些字段：
+      measure   —— "head" | "tail" | "head-tail"，取哪一侧的帧当站立基准（默认 head-tail）
+      reference —— 另一个素材名，整段都用那个素材量出来的缩放与水平基准（跨素材对齐用）
+      scale     —— 直接指定缩放系数（覆盖按站立高度算出来的值）
+      center_x  —— 直接指定水平基准像素（覆盖量出来的中位数）
+    """
+    if not OVERRIDES.exists():
+        return {}
+    return json.loads(OVERRIDES.read_text(encoding="utf-8"))
+
+
+def _process_one(video: Path, overrides: dict[str, dict]) -> tuple[dict, bool]:
     """处理单个视频（worker 函数）：测量 + 转码（或跳过转码），返回 entry。
 
     注意：entry 必须可 JSON 序列化（params.json 由主进程汇总写入）。
@@ -191,9 +224,24 @@ def _process_one(video: Path) -> tuple[dict, bool]:
     dst = OUT / (video.stem + ".webm")
     # 断点续跑：完整输出已存在 → 跳过转码（但仍测量，保证 params.json 完整）
     skip = _is_valid(dst, video)
-    standing = measure_standing(video)
+    ov = overrides.get(video.stem, {})
+    mode = ov.get("measure", "head-tail")
+    # reference：整段用另一个素材的站立基准——「靠边」三段要与「靠边-开始」同一落位，
+    # 否则段与段之间会跳位（靠边-循环整段都是扒边姿态，自己量出来的基准是歪的）。
+    ref_name = ov.get("reference")
+    if ref_name:
+        ref_video = SRC / f"{ref_name}.webm"
+        if ref_video.exists():
+            standing = measure_standing(ref_video, mode)
+        else:
+            # 参考素材缺失就退回自己量：落位会歪，但宁可让日志报出来，也不要整批崩掉。
+            print(f"[WARN] {video.name}: reference '{ref_name}' not found, measuring itself", flush=True)
+            standing = measure_standing(video, mode)
+    else:
+        standing = measure_standing(video, mode)
     union = measure_content_union(video)
-    scale = TARGET_HEIGHT / standing["height"]
+    scale = float(ov.get("scale", TARGET_HEIGHT / standing["height"]))
+    center_x = float(ov.get("center_x", standing["center_x"]))
     entry = {
         "file": video.name,
         "standing": {k: round(v, 1) for k, v in standing.items()},
@@ -201,7 +249,7 @@ def _process_one(video: Path) -> tuple[dict, bool]:
         "scale": round(scale, 6),
     }
     if not skip:
-        filter_complex = build_filter(scale, standing)
+        filter_complex = build_filter(scale, standing, center_x)
         convert_video(video, dst, filter_complex)
     return entry, skip
 
@@ -215,8 +263,9 @@ def main() -> int:
 
     payload = {"canvas": f"{CANVAS_W}x{CANVAS_H}", "target_height": TARGET_HEIGHT, "feet_y": FEET_Y, "videos": []}
     total = len(videos)
+    overrides = load_overrides()
     with ProcessPoolExecutor(max_workers=PARALLEL) as ex:
-        for index, (entry, skip) in enumerate(ex.map(_process_one, videos), start=1):
+        for index, (entry, skip) in enumerate(ex.map(_process_one, videos, [overrides] * total), start=1):
             payload["videos"].append(entry)
             status = "SKIP" if skip else "OK"
             print(f"[{index}/{total}] {entry['file']} {status} (scale={entry['scale']})", flush=True)
