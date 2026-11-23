@@ -18,9 +18,9 @@ import {
 import type { WindowsNotificationReader, WindowsSystemNotification } from './windows.ts';
 import type { HostContext } from '../plugin/context.ts';
 
-/** 一只桌宠（默认在桌面上、醒着、没被占用）。 */
-function pet(id: string, display = 'desktop'): Record<string, unknown> {
-  return { id, display };
+/** 一只桌宠（醒着、没被占用）。 */
+function pet(id: string): Record<string, unknown> {
+  return { id };
 }
 
 /** 假的通知读取器：库里有一批通知，水位线以上才算新增。 */
@@ -72,17 +72,14 @@ describe('pickSpeaker', () => {
     );
   });
 
-  test('网页端专属的宠物不挑（桌面上没有它）', () => {
-    assert.equal(
-      pickSpeaker([pet('a', 'web')], () => false),
-      null,
+  test('可见性不再参与挑选：桌宠恒可见，display 字段不影响结果', () => {
+    assert.deepEqual(
+      pickSpeaker([{ id: 'a', display: 'web' }], () => false),
+      { petId: 'a', voiceTo: 'desktop' },
     );
-  });
-
-  test('display=none 不挑', () => {
-    assert.equal(
-      pickSpeaker([pet('a', 'none')], () => false),
-      null,
+    assert.deepEqual(
+      pickSpeaker([{ id: 'a', display: 'none' }], () => false),
+      { petId: 'a', voiceTo: 'desktop' },
     );
   });
 
@@ -171,7 +168,7 @@ describe('tickSystemNotifications', () => {
 
   test('没有能说话的宠物时通知不丢：队列留着，等下一拍', () => {
     const reader = fakeReader({ maxId: 7, notifications: [sys(8, 'a.b.c', '一')] });
-    const deps = fakeDeps({ reader, effectivePetList: () => [pet('a', 'web')] });
+    const deps = fakeDeps({ reader, effectivePetList: () => [] });
     const state = createRelayState();
     tickSystemNotifications(deps, state);
     assert.equal(tickSystemNotifications(deps, state), 0);
@@ -191,7 +188,7 @@ describe('tickSystemNotifications', () => {
 
   test('队列超上限时丢最旧的', () => {
     const many = Array.from({ length: MAX_PENDING + 5 }, (_, i) => sys(i + 1, 'a.b.c', String(i)));
-    const deps = fakeDeps({ effectivePetList: () => [pet('a', 'web')], reader: fakeReader({ notifications: many }) });
+    const deps = fakeDeps({ effectivePetList: () => [], reader: fakeReader({ notifications: many }) });
     const state = createRelayState();
     tickSystemNotifications(deps, state);
     tickSystemNotifications(deps, state);

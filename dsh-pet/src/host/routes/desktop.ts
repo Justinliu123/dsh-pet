@@ -15,7 +15,7 @@ export async function handleDesktopRoutes(deps: PetRouteDeps, input: RouteInput)
   const { method, rest } = input;
 
   // 桌面端「重载配置」（右键菜单 → POST /reload）：重启桌面 Helper，全部窗口按最新配置重建。
-  // 与保存走同一条重启路径（requestRestart），宠物数量 / display / size 的变化同样生效——渲染端
+  // 与保存走同一条重启路径（requestRestart），宠物数量 / size 的变化同样生效——渲染端
   // 就地重拉做不到这几项。发起者就是即将被重启的 helper，故不 await、立刻回 200。
   if (rest === 'reload') {
     if (method !== 'POST') return methodNotAllowed();
@@ -33,7 +33,7 @@ export async function handleDesktopRoutes(deps: PetRouteDeps, input: RouteInput)
     const canQuit = typeof quit === 'function';
     if (method === 'GET') return okResult({ canQuit });
     if (method !== 'POST') return methodNotAllowed();
-    // 失败按动作端点口径回 200 + 结构化结果（与 /pet-display 一致）：不支持退出不是协议层错误。
+    // 失败按动作端点口径回 200 + 结构化结果：不支持退出不是协议层错误。
     if (!canQuit) {
       return failResult('unsupported', '宿主未提供退出能力（DSH 内请关闭桌面模式）');
     }

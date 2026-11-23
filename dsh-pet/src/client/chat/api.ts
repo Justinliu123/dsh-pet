@@ -116,16 +116,15 @@ export { avatarUrl, LOGO_URL } from '../../shared/avatar.ts';
 /**
  * 让宠物重演一次记忆里记下的动作（聊天窗口「播放动作」按钮）。
  *
- * 走 `/anim` 而不是直接改 state：白名单校验、占用锁与显示端门禁、播放回执都由宿主那一条链路负责。
+ * 走 `/anim` 而不是直接改 state：白名单校验、占用锁与播放回执都由宿主那一条链路负责。
  *
  * @param petId - 宠物 id。
  * @param name - 记忆里记下的动作名（来自 `animations.categories`）。
  * @returns 是否受理成功；失败只留日志，不弹错误条——它只是重播，不影响对话主流程。
  */
 export async function playAction(petId: string, name: string): Promise<boolean> {
-  // surface=any：与对话同口径——重播不要求特定一端，宠物在哪端渲染就哪端播。
-  // /anim 的 surface 是必填项（缺省直接 400），这里不能省。
-  return postAction(ROUTE_PATH + '/anim?pet=' + encodeURIComponent(petId) + '&surface=any', { name });
+  // 重播不要求特定一端：桌宠只住在桌面端，点播直接落到那只宠物身上。
+  return postAction(ROUTE_PATH + '/anim?pet=' + encodeURIComponent(petId), { name });
 }
 
 /** 附件引用 → 取图地址（宿主按内容哈希回字节）。 */
@@ -260,8 +259,8 @@ export async function sendMessage(
   text: string,
   attachment?: ChatAttachment,
 ): Promise<{ ok: true } | { ok: false; message: string }> {
-  // surface=any：对话窗口不看渲染结果，隐藏（display: none）的宠物也应当能对话
-  const url = ROUTE_PATH + '/chat?pet=' + encodeURIComponent(petId) + '&surface=any';
+  // 对话窗口不看渲染结果：宠物恒在桌面端显示，对话照常落到那只宠物身上。
+  const url = ROUTE_PATH + '/chat?pet=' + encodeURIComponent(petId);
   const result = await sendChat(url, text, attachment);
   return result.ok ? { ok: true } : { ok: false, message: result.message ?? result.reason };
 }

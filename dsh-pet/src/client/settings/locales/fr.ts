@@ -41,7 +41,6 @@ export const fr: Record<Key, string> = {
   shortcutRowPaste: 'Coller une image',
   shortcutRowTodo: 'Tâches',
   shortcutRowSleep: 'Dormir / réveiller',
-  shortcutRowDisplay: 'Position d’affichage',
   shortcutRowSidebar: 'Ouvrir le chat latéral',
   shortcutGroupPet: 'Raccourcis du compagnon',
   shortcutGroupPetHint:
@@ -81,12 +80,6 @@ export const fr: Record<Key, string> = {
   fixedEnabled: 'Compagnon fixe',
   fixedEnabledHint:
     "Une fois activé, la chaîne aléatoire ne fait plus se retourner ni s'éloigner le compagnon — seules les actions sur place sont jouées. Les déclenchements par menu contextuel et par API, ainsi que les animations solde / murmure / état de travail, ne sont pas affectés.",
-  displayLabel: 'Affichage',
-  displayHint: 'web = navigateur seul / desktop = bureau seul / both = les deux / none = aucun',
-  'display.web': 'Navigateur seul',
-  'display.desktop': 'Bureau seul',
-  'display.both': 'Les deux',
-  'display.none': 'Aucun',
   cornerLabel: 'Position',
   'corner.top-left': 'En haut à gauche',
   'corner.top-right': 'En haut à droite',
@@ -158,7 +151,7 @@ export const fr: Record<Key, string> = {
     "Multi-écrans : une fois activé, le compagnon reste sur l'écran où il se trouve — un compagnon lancé ne rebondit que sur l'écran du relâchement (les jointures d'écrans font office de murs, il ne passe pas sur l'écran voisin) et l'errance autonome ne se fait que sur l'écran actuel (tout pas qui franchirait la jointure est annulé). Désactivé, il traverse les écrans comme d'habitude. Mode bureau uniquement — l'overlay du navigateur reste de toute façon dans la zone visible.",
   trayToggle: 'Zone de notification',
   trayToggleHint:
-    "Affiche une icône dans la zone de notification (barre de menus sur macOS) dès que le mode bureau démarre. Elle liste tous les compagnons de la configuration et permet de basculer chacun entre bureau et web / aucun — y compris ceux qui ne sont pas sur le bureau et n'ont donc aucune fenêtre à cliquer droit. Une fois désactivée, ramener un compagnon sur le bureau exige d'ouvrir le navigateur (la page de configuration, ou un clic droit sur le compagnon web). Windows range déjà ces icônes dans le panneau « icônes masquées ». Mode bureau uniquement.",
+    'Affiche une icône dans la zone de notification (barre de menus sur macOS) dès que le mode bureau démarre. Le menu ne propose que « Quitter », pour fermer le compagnon de bureau même quand aucune fenêtre n’est visible. Windows range déjà ces icônes dans le panneau « icônes masquées ». Mode bureau uniquement.',
   voiceTitle: 'Synthèse vocale',
   voiceHint:
     "Quatre interrupteurs et une voix : chaque type de parole a son propre interrupteur, aucun ne dépend d'un autre. Tout est désactivé par défaut et écrit dans la configuration utilisateur lors de l'enregistrement (jamais immédiatement).",

@@ -1,9 +1,9 @@
 'use strict';
 /**
- * 系统托盘：桌面模式的显示开关与「退出」入口。
+ * 系统托盘：桌面模式的「退出」入口。
  *
- * 托盘是桌面模式唯一不进浏览器的入口——某只宠物改成 web/none 后窗口与右键菜单一起消失，
- * 只有托盘还能把它切回来。菜单是静态的：切换 display 后宿主会重启本进程，新进程按新配置重建。
+ * 桌宠只显示在桌面端，托盘不再承担「把宠物送到别处」——菜单里只有退出，
+ * 让没有宠物窗口时也能关掉桌宠。
  * @module dsh-pet/runtime/electron-helper/main/tray
  */
 
@@ -16,7 +16,7 @@ const path = require('node:path');
  * @param deps.Tray - Electron Tray 构造器。
  * @param deps.Menu - Electron Menu（模板 → 菜单）。
  * @param deps.nativeImage - Electron nativeImage（图标）。
- * @param deps.hostRequest - 与宿主通信（读配置、改 display、请求退出）。
+ * @param deps.hostRequest - 与宿主通信（读配置、请求退出）。
  * @param deps.callbackUrl - bridge 回调地址（建托盘前要等它就绪）。
  * @param deps.isBridge - 是否由宿主以 bridge 模式拉起。
  * @param deps.appMode - 是否同进程应用模式。
@@ -37,20 +37,7 @@ function createTray({
   platform,
   helperDir,
 }) {
-  const isDesktopDisplay = (display) => display === 'desktop' || display === 'both';
-
-  /** 翻转「桌面位」：both↔web、desktop↔none——浏览器位保持不动，因此不制造新的单向门 */
-  const toggleDisplay = (display) =>
-    display === 'both' ? 'web' : display === 'web' ? 'both' : display === 'desktop' ? 'none' : 'desktop';
-
   let tray = null;
-
-  /** 写回某只宠物的 display：宿主写完配置会重启本进程，响应可能永远不回（同 sprite.js 的 setPetDisplay） */
-  function traySetPetDisplay(id, display) {
-    hostRequest('POST', petRoute + '/pet-display', JSON.stringify({ id, display })).catch((e) => {
-      console.error('[dsh-pet-desktop-helper] tray pet-display failed:', String(e && e.message ? e.message : e));
-    });
-  }
 
   /** 托盘图标：包内 logo 缩到 16×16（macOS 要模板图，否则深色菜单栏下看不见） */
   function trayIcon() {
@@ -84,28 +71,17 @@ function createTray({
   }
 
   /**
-   * 按当前配置拼托盘菜单；返回 null 表示此时不该有托盘（开关关掉 / 配置里没有宠物）。
+   * 按当前配置拼托盘菜单；返回 null 表示此时不该有托盘（开关关掉）。
    *
-   * 独立成函数是为了应用模式的重建：那边改 display 只重建窗口、不重启进程，
-   * 勾选状态得靠这里重读一次刷新，否则菜单和配置对不上。
+   * 独立成函数是为了应用模式的重建：那边改配置只重建窗口、不重启进程，
+   * 菜单得靠这里重读一次配置刷新。
    */
   async function buildMenu() {
     const resp = await hostRequest('GET', petRoute + '/config');
     const merged = JSON.parse(resp.body || '{}');
     // 托盘开关（main 条目的 trayEnabled）：只有显式 false 才不建，缺失或写坏时保持建，
-    // 免得一份老配置或一个错值让托盘无声消失。与下面的 pets 取自同一份成品配置。
+    // 免得一份老配置或一个错值让托盘无声消失。
     if (merged && merged.main && merged.main.trayEnabled === false) return null;
-    // 成品聚合的形状是 { <条目>: <整份配置文档> }：顶层键不是宠物，宠物在各条目的 pets 数组里
-    // （与渲染端同一契约）。托盘只要 id/name/display，所以不吹条目级字段。
-    const pets = Object.values(merged)
-      .flatMap((conf) => (conf && Array.isArray(conf.pets) ? conf.pets : []))
-      .map((pet) => ({
-        id: String((pet && pet.id) || ''),
-        name: String((pet && pet.name) || '').trim(), // host 已保证 name 缺失时回落 id
-        display: String((pet && pet.display) || ''),
-      }))
-      .filter((pet) => pet.id);
-    if (!pets.length) return null; // 配置里没有任何宠物：没有可切换的对象，不建托盘
     const canQuit = await canQuitSelf();
     const quitApp = () => {
       if (!isBridge || appMode) {
@@ -117,20 +93,11 @@ function createTray({
         console.error('[dsh-pet-desktop-helper] tray quit failed:', String(e && e.message ? e.message : e));
       });
     };
-    return Menu.buildFromTemplate([
-      ...pets.map((pet) => ({
-        label: pet.name || pet.id,
-        type: 'checkbox',
-        checked: isDesktopDisplay(pet.display),
-        click: () => traySetPetDisplay(pet.id, toggleDisplay(pet.display)),
-      })),
-      ...(canQuit ? [{ type: 'separator' }, { label: '退出', click: quitApp }] : []),
-    ]);
+    return Menu.buildFromTemplate(canQuit ? [{ label: '退出', click: quitApp }] : []);
   }
 
   /**
-   * 建托盘：列出配置里全部宠物（含 display 为 web/none 的——它们当前勾是空的，点一下就能送回来，
-   * 这是托盘相对宠物右键菜单的增量）。勾 = 当前 display 含 desktop/both。
+   * 建托盘：菜单里只有「退出」——没有宠物窗口时也能关掉桌宠。
    */
   async function startTray() {
     try {
@@ -150,7 +117,7 @@ function createTray({
     }
   }
 
-  /** 重读配置并刷新菜单勾选；没建托盘时什么都不做（应用模式重建窗口后调用）。 */
+  /** 重读配置并刷新菜单；没建托盘时什么都不做（应用模式重建窗口后调用）。 */
   async function refreshTray() {
     if (!tray) return;
     try {

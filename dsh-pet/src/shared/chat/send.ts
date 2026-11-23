@@ -22,7 +22,7 @@ const SEND_TIMEOUT_MS = 60_000;
  * 发送一句对话（携带记忆去宿主生成回复并写入记忆）。
  * 网络或解析失败显式抛错，调用方决定报错方式，绝不静默伪造回复。
  *
- * @param baseUrl - 已含 `?pet=&surface=` 的完整对话地址。
+ * @param baseUrl - 已含 `?pet=` 的完整对话地址。
  * @param text - 用户输入正文（宿主会 trim 并校验 2000 字上限）。
  * @param attachment - 可选的一张图片；不传时请求体只有 `text`，与旧版逐字一致。
  * @returns 成功，或归一化后的失败原因与文案。

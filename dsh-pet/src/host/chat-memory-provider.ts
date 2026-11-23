@@ -53,8 +53,6 @@ export interface RawFacts {
     readonly name: string;
     /** 所属种类（配置条目），如 `main`。 */
     readonly entry: string;
-    /** 显示位置档，如 `both`。 */
-    readonly display: string;
   };
 }
 

@@ -22,7 +22,7 @@ Object.assign(PetSprite.prototype, {
     this.stopMove(); // 菜单悬停期间宠物不漫游
     // 桌面专属工具根项 + 共享菜单树（动作 → 分类 → 具体动画）。碎碎念/对话无条件显示：手动触发
     // 不受 whisperEnabled 限制（该字段只影响自动轮询）。首项文案与去向随宿主形态变，见 OPEN_LABEL。
-    // 顺序：打开软件 / 余额 / 待办 / 碎碎念 / 对话 / 配图 / 睡觉 → 动作树 → 显示位置 / 重载配置 / 回到初始位置。
+    // 顺序：打开软件 / 余额 / 待办 / 碎碎念 / 对话 / 配图 / 睡觉 → 动作树 → 重载配置 / 回到初始位置。
     const tools = [
       {
         label: OPEN_LABEL[OPEN_TARGET],
@@ -51,12 +51,8 @@ Object.assign(PetSprite.prototype, {
       if (this.sleeping) tools.push({ label: '起来', action: 'wake', hint: S.SLEEP_HOTKEY_HINT });
       else tools.push({ label: '睡觉', action: 'sleep', hint: S.SLEEP_HOTKEY_HINT });
     }
-    // 动作树之后是维护类：显示位置 → 重载配置 → 回到初始位置。
+    // 动作树之后是维护类：重载配置 → 回到初始位置。
     const tail = [
-      // 显示位置（仅网页/仅桌面/两者/都不）：改这只宠物的 display 配置，由宿主重载生效。
-      // 与浏览器端注入同一份子菜单，两端文案与取值不会漂移。不就地开关窗：窗口是进程启动时按
-      // DSH_PET_PETS 一次性建的，就地增删既改不了磁盘配置也改不了窗口数量。
-      S.displayMenuBranch(),
       // 重载配置：请宿主重启桌面 Helper，全部窗口按最新配置重建。维护动作，排在回到初始位置之前。
       { label: '重载配置', action: 'reload' },
       { label: '回到初始位置', action: 'home' },
@@ -145,10 +141,6 @@ Object.assign(PetSprite.prototype, {
       this.goHome(); // 停漫游/移动，清会话位置，回配置角落
       return;
     }
-    if (leaf.action === 'set-display') {
-      this.setPetDisplay(leaf.display); // 改这只宠物的显示位置：写 display 配置，由宿主重载生效
-      return;
-    }
     if (leaf.action === 'reload') {
       this.reloadDesktop(); // 请宿主重启桌面 Helper：全部桌面宠物窗口按最新配置重建
       return;
@@ -185,9 +177,9 @@ Object.assign(PetSprite.prototype, {
   // 「查看余额」菜单：POST 动作让宿主刷新余额。结果这里什么都不用做——写叶子会让版本号变，
   // 挂着的长轮询那一拍立刻返回并展示（同一展示路径）。数据只有一个出口（S），菜单只负责让它刷新。
   // 不做 balanceEnabled 门控：手动请求不受开关限制，关了余额的宠物被点一次也该看到数据。
-  // 带 pet：这次只让被点的那只弹（宿主写进叶子的归属）；surface=desktop = 本窗口就是桌面端。
+  // 带 pet：这次只让被点的那只弹（宿主写进叶子的归属）。
   showBalanceFromMenu() {
-    S.postAction(BALANCE_URL + '?pet=' + encodeURIComponent(this.pet.id) + '&surface=desktop')
+    S.postAction(BALANCE_URL + '?pet=' + encodeURIComponent(this.pet.id))
       .then((ok) => {
         if (!ok) console.warn('[dsh-pet] 菜单查看余额：刷新动作未成功');
       })
@@ -200,7 +192,7 @@ Object.assign(PetSprite.prototype, {
   // 本端什么都不用做，叶子变了由轮询分发到 showEnvNow。fresh=1 是用户点这个按钮的唯一意义：
   // 平时对话走缓存（天气 1 小时），手动查必须拿现在的。
   showEnvironmentFromMenu() {
-    S.postAction(ENVIRONMENT_URL + '?pet=' + encodeURIComponent(this.pet.id) + '&surface=desktop&fresh=1')
+    S.postAction(ENVIRONMENT_URL + '?pet=' + encodeURIComponent(this.pet.id) + '&fresh=1')
       .then((ok) => {
         if (!ok) console.warn('[dsh-pet] 菜单查询天气：刷新动作未成功 pet=' + this.pet.id);
       })
@@ -213,13 +205,12 @@ Object.assign(PetSprite.prototype, {
   // 挂着的长轮询送达。手动触发不受 whisperEnabled 限制（该字段只关自动周期）。
   // image 给了就只用这张（「配图」菜单点的是具体某张）：不在池内宿主回 unknown-image，本端只记日志。
   showWhisperFromMenu(image) {
-    // surface 必填：本窗口就是桌面端
     // 桌面窗口是 file://，语音接口得走 bridge 绝对地址；念不念由 say.voiceTo 决定，
     // 本端身份在启动时已经 S.setSurface('desktop') 登记过。
     S.setVoiceBase(BASE);
     // 图名是配置里的中文键，必须编码（可能含空格与全角字符）
     const pic = image ? '&image=' + encodeURIComponent(image) : '';
-    S.postAction(WHISPER_URL + '?pet=' + encodeURIComponent(this.pet.id) + '&surface=desktop' + pic)
+    S.postAction(WHISPER_URL + '?pet=' + encodeURIComponent(this.pet.id) + pic)
       .then((ok) => {
         if (!ok)
           console.warn('[dsh-pet] 菜单碎碎念：生成动作未成功 pet=' + this.pet.id + (image ? ' image=' + image : ''));
@@ -300,7 +291,6 @@ Object.assign(PetSprite.prototype, {
     const m = S.mountChatDialog({
       petId: this.pet.id,
       baseUrl: BASE + '/chat',
-      surface: 'desktop',
       x: Math.max(4, this.hit.getBoundingClientRect().right + 6),
       y: Math.max(4, this.hit.getBoundingClientRect().top + 6),
       // 拖拽落到宠物身上时直接带着图开弹窗
@@ -386,27 +376,13 @@ Object.assign(PetSprite.prototype, {
   },
 
   // 「重载配置」菜单：请宿主重启桌面 Helper，与设置页「保存」同一条重启路径（宿主 POST /reload →
-  // syncDesktop）。不在渲染端就地重拉：窗口数量/display/size 由宿主按 DSH_PET_PETS 建，且全局轮询是
+  // syncDesktop）。不在渲染端就地重拉：窗口数量/size 由宿主按 DSH_PET_PETS 建，且全局轮询是
   // 一次性启动的（loopsStarted），就地重建会漏启新循环或留下旧定时器。
   // 本请求由即将被重启的进程发出，响应可能永远不回（宿主杀进程时回调地址已失效），故不 await、
   // 不重试，失败只记日志——重载本身就是把本进程换掉。
   reloadDesktop() {
     fetch(BASE + '/reload', { method: 'POST' }).catch((e) => {
       console.warn('[dsh-pet] 重载配置请求失败（宿主不可达？）', e);
-    });
-  },
-
-  // 「显示位置」菜单：改这一只宠物的 display，写它自己的配置，再由宿主重载生效。取值直接来自菜单项，
-  // 渲染端不做推导（当前状态以配置为准）。不就地开关窗：窗口是进程启动时按 DSH_PET_PETS 一次性建的。
-  // 与 reloadDesktop 同一处境：选「仅网页/都不」时本进程会在重载中被换掉，故不 await、不重试。
-  setPetDisplay(display) {
-    if (!display) return;
-    fetch(BASE + '/pet-display', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: this.pet.id, display }),
-    }).catch((e) => {
-      console.warn('[dsh-pet] 显示位置请求失败（宿主不可达？）', e);
     });
   },
 

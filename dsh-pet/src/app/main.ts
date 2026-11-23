@@ -6,7 +6,15 @@
  * @module dsh-pet/src/app/main
  */
 
-import { accessSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync, constants as fsConstants } from 'node:fs';
+import {
+  accessSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+  constants as fsConstants,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -147,7 +155,6 @@ function appConfigPaths(): ConfigPaths {
     petDir: join(root, 'pet'),
   };
 }
-
 
 /**
  * 桌面 Helper 的 DPI 探测子进程标记。
@@ -324,17 +331,14 @@ async function boot(): Promise<void> {
   });
 }
 
-
 /**
- * 桌面可见宠物清单（[{id,size}]）。
- * 与 `src/host/index.ts` 的 isDesktopVisible 同口径：display 含 desktop/both 才建窗。
+ * 桌面宠物清单（[{id,size}]）。
+ * 桌宠只住在桌面端，配置里的宠物都会建透明小窗。
  */
 function desktopPets(): Array<{ id: string; size: number }> {
   try {
     const pets = flattenPetList(readAllConfig(appConfigPaths()));
-    const desktop = pets
-      .filter((pet) => pet.display === 'desktop' || pet.display === 'both')
-      .map((pet) => ({ id: String(pet.id), size: Number(pet.size) }));
+    const desktop = pets.map((pet) => ({ id: String(pet.id), size: Number(pet.size) }));
     log(`桌面宠物 ${JSON.stringify(desktop)}`);
     return desktop;
   } catch (error) {
@@ -359,7 +363,7 @@ function status(port: number): Record<string, unknown> {
     port,
     pluginRoot: packageRoot,
     configFile: paths.userFile,
-    pets: pets.map((pet) => ({ id: pet.id, name: pet.name, display: pet.display })),
+    pets: pets.map((pet) => ({ id: pet.id, name: pet.name })),
   };
 }
 
@@ -368,9 +372,7 @@ function landingPage(port: number): string {
   const info = status(port);
   const pets = (info.pets as Array<Record<string, unknown>>) ?? [];
   const petLines = pets.length
-    ? pets
-        .map((pet) => `<li>${escapeHtml(String(pet.name ?? pet.id))}（${escapeHtml(String(pet.display))}）</li>`)
-        .join('')
+    ? pets.map((pet) => `<li>${escapeHtml(String(pet.name ?? pet.id))}</li>`).join('')
     : '<li>（未读到宠物，检查配置文件）</li>';
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><title>dsh-pet</title>

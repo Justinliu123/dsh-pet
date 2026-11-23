@@ -6,7 +6,7 @@
  * 没有可见宠物或被第三方占用时跳过且不推进——条件满足后的下一拍立刻补上，这次提醒不会丢。
  * @module dsh-pet/src/host/plugin/todo-reminders
  */
-import { pickVoiceSurface } from '../surface.ts';
+import { VOICE_TARGET } from '../voice-target.ts';
 import { pickReminder, reminderText } from '../todo/policy.ts';
 import type { TodoStore } from '../todo/store.ts';
 import type { LockStore } from '../lock.ts';
@@ -66,17 +66,14 @@ export function pickReminderSpeaker(
   isLocked: (petId: string) => boolean,
   isSleeping: (petId: string) => boolean = () => false,
 ): string | null {
-  let desktopOnly: string | null = null;
   for (const pet of pets) {
     const petId = String(pet.id ?? '');
     if (petId === '') continue;
-    if (pet.display === 'none') continue;
     if (isLocked(petId)) continue;
     if (isSleeping(petId)) continue;
-    if (pet.display === 'web' || pet.display === 'both') return petId;
-    desktopOnly ??= petId;
+    return petId;
   }
-  return desktopOnly;
+  return null;
 }
 
 /**
@@ -98,10 +95,8 @@ export async function tickTodoReminders(deps: TodoReminderTickDeps): Promise<voi
     (petId) => deps.isSleeping?.(petId) ?? false,
   );
   if (speaker === null) return;
-  // 该由哪一端念：pickReminderSpeaker 已排除 display=none，所以这里不会是 null（防御性保留可选）；
   // 播报开关关掉时干脆不写这个键（叶子不带 = 谁都不念），气泡照旧弹。
-  const display = String(pets.find((pet) => String(pet.id ?? '') === speaker)?.display ?? '');
-  const voiceTo = deps.isVoiceTodoEnabled() ? pickVoiceSurface(display) : null;
+  const voiceTo = deps.isVoiceTodoEnabled() ? VOICE_TARGET : null;
   deps.state.writePet(speaker, 'say', {
     text: reminderText(due.todo, now),
     duration: BUBBLE_DURATION_MS,

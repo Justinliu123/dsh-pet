@@ -88,20 +88,8 @@ export function configPathsFor(root: string, home: string): ConfigPaths {
   return configPathsAt(root, join(home, 'dsh-pet'));
 }
 
-/** 宠物列表的展示串：display 原样打印，供用户确认。 */
+/** 宠物列表的展示串，供用户确认。 */
 export function describePets(pets: Record<string, unknown>[]): string {
   if (pets.length === 0) return '（没有宠物：配置里 pets 为空）';
-  return pets
-    .map((pet) => `${String(pet.id ?? '?')}(size=${String(pet.size ?? '?')}, display=${String(pet.display ?? '?')})`)
-    .join('  ');
-}
-
-/**
- * 判断实例是否会出现在桌面（display 含 desktop 或 both），只用于提示。
- * @param pet - 宠物条目。
- * @returns 是否会出现在桌面。
- */
-export function isDesktopVisible(pet: Record<string, unknown>): boolean {
-  const display = pet.display;
-  return display === 'desktop' || display === 'both';
+  return pets.map((pet) => `${String(pet.id ?? '?')}(size=${String(pet.size ?? '?')})`).join('  ');
 }

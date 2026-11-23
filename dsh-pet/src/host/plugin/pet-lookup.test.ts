@@ -26,7 +26,7 @@ function harness(): { lookup: ReturnType<typeof createPetLookup>; state: PollSta
   writeFileSync(
     paths.defaultFile,
     JSON.stringify({
-      pets: [{ id: 'p', name: 'P', display: 'web' }],
+      pets: [{ id: 'p', name: 'P' }],
       animations: {
         idle: ['i'],
         turn: [],

@@ -90,7 +90,7 @@ function recallRequest(
       now: 0,
       memes: [],
       actions: [],
-      pet: { id: petId, name: '小女仆', entry: 'main', display: 'both' },
+      pet: { id: petId, name: '小女仆', entry: 'main' },
     },
   };
 }

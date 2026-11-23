@@ -114,7 +114,6 @@ test('config pet IDs: duplicate IDs return 200 + bad-request without creating a 
     name: 'Blue',
     size: 240,
     balanceEnabled: false,
-    display: 'web',
     position: { corner: 'top-right', marginX: 20, marginY: 20 },
   };
   for (const id of ['main', ' main ']) {

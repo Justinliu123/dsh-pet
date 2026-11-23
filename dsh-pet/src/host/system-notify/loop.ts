@@ -12,7 +12,7 @@
  * 文案与语音归独立版所有，否则两边各生成一份、语音各念一遍。
  * @module dsh-pet/src/host/system-notify/loop
  */
-import { displayCovers } from '../surface.ts';
+import { VOICE_TARGET, type VoiceTarget } from '../voice-target.ts';
 import { dshFrameToNotification } from './dsh-events.ts';
 import { isDshSource, notificationSpeech, shouldRelay, type SystemNotification } from './notify-text.ts';
 import type { WindowsNotificationReader, WindowsSystemNotification } from './windows.ts';
@@ -28,22 +28,18 @@ export const BUBBLE_DURATION_MS = 15000;
 /** 待转述队列上限（条）：攒太多就丢最旧的——她念的是「刚发生的」，积压的历史没有意义。 */
 export const MAX_PENDING = 20;
 
-/** 转述发生在桌面上：她住在桌面窗口里，网页端只是数据源。 */
-export const RELAY_SURFACE = 'desktop';
-
 /** 承担这次转述的宠物。 */
 export interface RelaySpeaker {
   /** 宠物 id。 */
   readonly petId: string;
   /** 语音发给哪一端（桌面上那只会念）。 */
-  readonly voiceTo: typeof RELAY_SURFACE;
+  readonly voiceTo: VoiceTarget;
 }
 
 /**
- * 挑一只承担这次转述的宠物：要在桌面上、没被第三方占用、没睡着。
+ * 挑一只承担这次转述的宠物：没被第三方占用、没睡着。
  *
- * 与待办提醒的挑人规则同族（见 ../plugin/todo-reminders.ts），但判据多一条「在桌面上」——
- * 网页端没有桌宠，硬念给一个不存在的消费方等于白说。
+ * 与待办提醒的挑人规则同族（见 ../plugin/todo-reminders.ts）。
  */
 export function pickSpeaker(
   pets: readonly Record<string, unknown>[],
@@ -53,10 +49,9 @@ export function pickSpeaker(
   for (const pet of pets) {
     const petId = String(pet.id ?? '');
     if (petId === '') continue;
-    if (!displayCovers(RELAY_SURFACE, String(pet.display ?? ''))) continue;
     if (isLocked(petId)) continue;
     if (isSleeping(petId)) continue;
-    return { petId, voiceTo: RELAY_SURFACE };
+    return { petId, voiceTo: VOICE_TARGET };
   }
   return null;
 }
@@ -89,7 +84,7 @@ export interface SystemNotifyTickDeps {
   /** 睡着的宠物不打扰：睡着时说了它也听不见。 */
   isSleeping: (petId: string) => boolean;
   /** 写说话叶子。 */
-  writeSay: (petId: string, text: string, durationMs: number, voiceTo: typeof RELAY_SURFACE) => void;
+  writeSay: (petId: string, text: string, durationMs: number, voiceTo: VoiceTarget) => void;
   /** 读 DSH 通知段（桥镜像进来的会话事件帧）：counter 与帧内容。 */
   readNotifyFrame: () => { counter: number; data: unknown } | null;
   /** 开关：关着就什么都不做（连通知库都不开）。 */

@@ -871,21 +871,6 @@
               </div>
               <div class="pet-id" id="pet-id"></div>
 
-              <div class="pet-id">
-                <label for="surface-select">显示端</label>
-                <select id="surface-select" style="width:auto">
-                  <option value="any">any（哪端都行）</option>
-                  <option value="web">web（仅网页）</option>
-                  <option value="desktop">desktop（仅桌面）</option>
-                  <option value="both">both（两端都要）</option>
-                </select>
-                <span class="hint">
-                  动作接口的 <span class="mono">?surface=</span>（必填）：宿主拿它跟宠物的
-                  <span class="mono">display</span> 对一下，对不上就回
-                  <span class="mono">pet-not-displayed</span> + 该宠物<b>实际</b>的 display
-                </span>
-              </div>
-
               <div class="bubble-wrap">
                 <div class="bubble empty" id="say-bubble">还没有说过话</div>
                 <div class="bubble-time" id="say-time"></div>
@@ -2815,7 +2800,7 @@
       // 图片会记进记忆（只存附件引用，不存本体），所以发完重拉一次历史就能看到这张图
       const body = image ? { text, attachment: { mediaType: image.mediaType, data: image.base64 } } : { text };
       const note = image ? "附图 " + Math.round(image.bytes / 1024) + "KB" : "";
-      const r = await POST("/chat?pet=" + encodeURIComponent(S.chatPetId) + "&surface=" + surfaceOf(), { body, note });
+      const r = await POST("/chat?pet=" + encodeURIComponent(S.chatPetId), { body, note });
 
       // 业务失败同样是 HTTP 200（body.ok === false）：图片形状 / 超限 / 当前模式不支持都从这条路回
       if (!r.ok || (r.body && r.body.ok === false)) {
@@ -3528,7 +3513,7 @@
       const b = $("btn-whisper");
       b.disabled = true;
       b.textContent = "生成中…";
-      const r = await POST("/whisper?pet=" + encodeURIComponent(S.petId) + "&surface=" + surfaceOf());
+      const r = await POST("/whisper?pet=" + encodeURIComponent(S.petId));
       b.disabled = false;
       b.textContent = "让它说句话";
       if (r.ok && r.body && r.body.ok === false) {
@@ -3974,8 +3959,7 @@
     /**
      * 读实况（**桌面端**）：`GET /pose` —— 把宠物**实际**中心画进预览框（绿箭头，箭头方向 = 朝向）。
      *
-     * **不要求 `surface`**：它是读端点（同 GET /chat、GET /playback），surface 只加在会产生渲染端
-     * 可见效果的动作端点上。
+     * **不要求显示端参数**：桌宠只住在桌面端，读端点只报桌面端那只宠物的实况。
      *
      * **网页端没有这条路**：它的位置天生每个页面一份（两个标签页本来就不同），走页面内的 Cordis
      * 只读服务 `ctx.get('petApi7340').pose(petId)`——字段与坐标口径完全一致，只是"取"的方式不同。
@@ -4148,19 +4132,7 @@
       let q = "?pet=" + encodeURIComponent(petId);
       const lk = S.lock;
       if (lk && lk.petId === petId && lk.lockId) q += "&lock=" + encodeURIComponent(lk.lockId);
-      q += "&surface=" + surfaceOf();
       return q;
-    }
-
-    /**
-     * 页面级「显示端」→ `?surface=` 的取值（**必填**，issue #122 第 1 条）。
-     * 动作接口拿它跟宠物的 display 对一下：对不上就回 pet-not-displayed + 实际 display，
-     * 而不是默默受理、然后什么也不发生（见 src/host/surface.ts）。
-     * 默认 any = 哪端都行（只要不是 display:none），与"不校验"最接近但仍会拒掉不显示的宠物。
-     */
-    function surfaceOf() {
-      const el = $("surface-select");
-      return (el && el.value) || "any";
     }
 
     /**
@@ -4245,7 +4217,7 @@
       const ttl = Number($("lk-ttl").value);
       $("lk-result").textContent = "取锁中…";
       $("lk-hint").textContent = "";
-      const r = await POST("/lock?pet=" + encodeURIComponent(petId) + "&surface=" + surfaceOf(), {
+      const r = await POST("/lock?pet=" + encodeURIComponent(petId), {
         body: Number.isFinite(ttl) ? { ttl } : {},
       });
       if (r.status === 200 && r.body && r.body.ok) {
@@ -4270,7 +4242,7 @@
       $("lk-result").textContent = "续期中…";
       const body = { lockId: lk.lockId };
       if (Number.isFinite(ttl)) body.ttl = ttl;
-      const r = await POST("/lock?pet=" + encodeURIComponent(lk.petId) + "&surface=" + surfaceOf(), { body });
+      const r = await POST("/lock?pet=" + encodeURIComponent(lk.petId), { body });
       if (r.status === 200 && r.body && r.body.ok) {
         S.lock = { petId: r.body.petId, lockId: r.body.lockId, expiresAt: r.body.expiresAt };
         lockDone("已续期", r);
@@ -4513,7 +4485,7 @@
      */
     async function mnLock(petId) {
       if (S.lock && S.lock.petId === petId && S.lock.lockId) return true;
-      const r = await POST("/lock?pet=" + encodeURIComponent(petId) + "&surface=" + surfaceOf(), {
+      const r = await POST("/lock?pet=" + encodeURIComponent(petId), {
         body: { ttl: 120000 },
       });
       if (!(r.status === 200 && r.body && r.body.ok)) {

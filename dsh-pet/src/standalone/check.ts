@@ -18,7 +18,7 @@ import {
   resolveElectronPath,
 } from '../host/helper-process.ts';
 import type { StandaloneLogger } from './context.ts';
-import { configPathsFor, describePets, isDesktopVisible } from './options.ts';
+import { configPathsFor, describePets } from './options.ts';
 
 /** 读包版本，读不到时返回 unknown。 */
 export function packageVersion(root: string): string {
@@ -77,12 +77,10 @@ export function runCheck(logger: StandaloneLogger): number {
       const idle = Array.isArray(animations?.idle) ? animations.idle.length : 0;
       lines.push(`  条目 ${entry}：宠物 ${pets.length} 只  ${describePets(pets)}｜idle 动画 ${idle} 个`);
     }
-    const desktopVisible = flattenPetList(merged).filter(isDesktopVisible);
-    // 只有 display 为 desktop 或 both 的宠物会真的出现在桌面上。
+    const desktopCount = flattenPetList(merged).length;
+    // 桌宠只住在桌面端，配置里的宠物都会建透明小窗。
     lines.push(
-      `桌面小窗        ${desktopVisible.length} 只${
-        desktopVisible.length === 0 ? '（display 需要 desktop 或 both，否则独立模式没有可显示的宠物）' : ''
-      }`,
+      `桌面小窗        ${desktopCount} 只${desktopCount === 0 ? '（配置里没有宠物，独立模式没有可显示的宠物）' : ''}`,
     );
     for (const line of lines) logger.info(line);
     logger.info('结论：配置与 Electron 就绪，可以直接启动（npm run standalone）。');

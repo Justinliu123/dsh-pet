@@ -13,7 +13,6 @@ import { resolveFontPx } from '../../../shared/fonts.ts';
 import { resolvePetSizePx } from '../../../shared/pet-size.ts';
 import { makeBalanceBubble, makeEnvBubble, makeWhisperBubble } from '../../bubble.ts';
 import { makeTodoBubble } from '../../todo-bubble.ts';
-import { petBridge } from '../../settings.ts';
 import { playClickSound } from '../click-sound.ts';
 import { createMenuActions, type MenuActions } from '../menu-actions.ts';
 import { derivePetMetrics, petRootStyle, petStageStyle } from '../motion/geometry.ts';
@@ -204,7 +203,6 @@ export function createCardRuntime(rt: PetRuntime) {
     // 菜单动作派发：依赖运动、拖拽、提示与对话四处入口，所以放在它们之后。
     menuActionsRef.current ??= createMenuActions({
       animations: () => cfgRef.current.animations,
-      applyMerged: (merged) => petBridge.reload(merged),
       faceLeft: () => actions.setFacing('left'),
       isFacingRight: () => card.facingRef.current === 'right',
       openChat: () => entryRef.current?.openChat(),

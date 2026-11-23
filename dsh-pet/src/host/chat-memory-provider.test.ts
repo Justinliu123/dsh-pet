@@ -99,6 +99,6 @@ function rawFacts() {
     now: 0,
     memes: [],
     actions: [],
-    pet: { id: 'main', name: '小黑', entry: 'main', display: 'both' },
+    pet: { id: 'main', name: '小黑', entry: 'main' },
   };
 }

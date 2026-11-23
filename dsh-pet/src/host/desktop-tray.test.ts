@@ -1,7 +1,8 @@
 /**
  * 桌面托盘的行为契约（runtime/electron-helper/main/tray.js）。
  *
- * 三条行为必须成立：勾选来自配置、点一下写回相反的一档、退出项按运行形态决定自己退还是交给宿主。
+ * 三条行为必须成立：菜单里只有「退出」一项（桌宠只显示在桌面端，托盘不再列出宠物）；
+ * 退出项按运行形态决定自己退还是交给宿主；托盘开关关掉就不建托盘。
  * 依赖全由调用方注入（含 Electron 的 Tray/Menu/nativeImage），所以这里不需要真的 Electron。
  */
 import { describe, test } from 'node:test';
@@ -33,6 +34,7 @@ function harness(options: {
   appMode?: boolean;
   isBridge?: boolean;
   canQuit?: boolean;
+  trayEnabled?: boolean;
   pets?: Array<Record<string, unknown>>;
 }) {
   const requests: string[] = [];
@@ -61,7 +63,12 @@ function harness(options: {
       requests.push(method + ' ' + url);
       if (body !== undefined) bodies.push(body);
       if (url.endsWith('/config')) {
-        return { status: 200, body: JSON.stringify({ main: { pets: options.pets ?? [] } }) };
+        return {
+          status: 200,
+          body: JSON.stringify({
+            main: { pets: options.pets ?? [], trayEnabled: options.trayEnabled !== false },
+          }),
+        };
       }
       if (url.endsWith('/quit')) {
         return { status: 200, body: JSON.stringify({ canQuit: options.canQuit === true }) };
@@ -87,43 +94,43 @@ function lastMenu(menus: MenuItem[][]): MenuItem[] {
   return menu;
 }
 
-describe('createTray —— 勾选与点击', () => {
-  test('勾选状态来自配置：含 desktop / both 的两只被打勾', async () => {
+describe('createTray —— 菜单里只有退出', () => {
+  test('菜单里只有「退出」一项：不再列出宠物，也没有勾选项', async () => {
     const { tray, menus } = harness({
       pets: [
-        { label: 'a', id: 'a', display: 'both' },
-        { label: 'b', id: 'b', display: 'web' },
-        { label: 'c', id: 'c', display: 'desktop' },
+        { label: 'a', id: 'a' },
+        { label: 'b', id: 'b' },
       ],
     });
     await tray.start();
-    const items = lastMenu(menus).filter((item) => item.type === 'checkbox');
+    const items = lastMenu(menus);
     assert.deepEqual(
-      items.map((item) => item.checked),
-      [true, false, true],
+      items.map((item) => item.label),
+      ['退出'],
+      '托盘不再承担「把宠物送到别处」：菜单里只有退出',
+    );
+    assert.equal(
+      items.some((item) => item.type === 'checkbox'),
+      false,
+      '不再有按显示位置勾选的开关项',
     );
   });
 
-  test('点一下写回相反的一档：both→web，web→both，desktop→none，none→desktop', async () => {
-    const cases: ReadonlyArray<readonly [string, string]> = [
-      ['both', 'web'],
-      ['web', 'both'],
-      ['desktop', 'none'],
-      ['none', 'desktop'],
-    ];
-    for (const [from, to] of cases) {
-      const { tray, menus, requests, bodies } = harness({ pets: [{ label: 'a', id: 'a', display: from }] });
-      await tray.start();
-      const item = lastMenu(menus).find((entry) => entry.type === 'checkbox');
-      assert.ok(item?.click, '每只宠物都应有可点的开关项');
-      item.click();
-      assert.ok(requests.includes('POST /dsh-pet-7340/pet-display'), `display=${from} 时应把新值写回宿主`);
-      assert.equal(
-        (JSON.parse(bodies[0] ?? '{}') as { display?: string }).display,
-        to,
-        `display=${from} 应写成 ${to}（浏览器位保持不动）`,
-      );
-    }
+  test('托盘不再写回显示位置：点退出前不发任何写请求', async () => {
+    const { tray, requests } = harness({
+      pets: [{ label: 'a', id: 'a' }],
+    });
+    await tray.start();
+    assert.equal(
+      requests.some((request) => !request.startsWith('GET ')),
+      false,
+      '建菜单只读配置，不写回任何配置',
+    );
+    assert.equal(
+      requests.some((request) => request.includes('pet-display')),
+      false,
+      '显示位置写回端点已不存在，托盘也不再发它',
+    );
   });
 });
 
@@ -131,7 +138,7 @@ describe('createTray —— 退出项的分支', () => {
   test('应用模式：自己 app.quit()，不请求宿主', async () => {
     const { tray, menus, quits, requests } = harness({
       appMode: true,
-      pets: [{ label: 'a', id: 'a', display: 'both' }],
+      pets: [{ label: 'a', id: 'a' }],
     });
     await tray.start();
     const quit = lastMenu(menus).find((item) => item.label === '退出');
@@ -148,7 +155,7 @@ describe('createTray —— 退出项的分支', () => {
     const { tray, menus, quits, requests } = harness({
       isBridge: true,
       canQuit: true,
-      pets: [{ label: 'a', id: 'a', display: 'both' }],
+      pets: [{ label: 'a', id: 'a' }],
     });
     await tray.start();
     const quit = lastMenu(menus).find((item) => item.label === '退出');
@@ -162,7 +169,7 @@ describe('createTray —— 退出项的分支', () => {
     const { tray, menus } = harness({
       isBridge: true,
       canQuit: false,
-      pets: [{ label: 'a', id: 'a', display: 'both' }],
+      pets: [{ label: 'a', id: 'a' }],
     });
     await tray.start();
     assert.equal(
@@ -172,20 +179,32 @@ describe('createTray —— 退出项的分支', () => {
   });
 });
 
-describe('createTray —— 重建后刷新', () => {
-  test('refresh 重读配置：勾选跟着变，菜单被替换', async () => {
-    const pets: Array<Record<string, unknown>> = [{ label: 'a', id: 'a', display: 'both' }];
-    const { tray, menus } = harness({ pets });
+describe('createTray —— 托盘开关与重建', () => {
+  test('托盘开关关掉：连菜单都不建（没有托盘图标）', async () => {
+    const { tray, menus } = harness({ trayEnabled: false, pets: [{ label: 'a', id: 'a' }] });
     await tray.start();
-    assert.equal(lastMenu(menus)[0].checked, true);
-    pets[0] = { label: 'a', id: 'a', display: 'web' };
+    assert.equal(tray.exists(), false, '开关关掉时不建托盘');
+    assert.equal(menus.length, 0);
+  });
+
+  test('refresh 重读配置：菜单被替换，退出项仍在', async () => {
+    const { tray, menus } = harness({ pets: [{ label: 'a', id: 'a' }] });
+    await tray.start();
+    assert.deepEqual(
+      lastMenu(menus).map((item) => item.label),
+      ['退出'],
+    );
     await tray.refresh();
     assert.equal(menus.length, 2, 'refresh 应重新设置一次菜单');
-    assert.equal(lastMenu(menus)[0].checked, false, '配置变了勾选要跟着变');
+    assert.deepEqual(
+      lastMenu(menus).map((item) => item.label),
+      ['退出'],
+      '刷新后菜单里仍然只有退出',
+    );
   });
 
   test('没建托盘时 refresh 什么都不做（托盘开关关掉的情况）', async () => {
-    const { tray, menus } = harness({ pets: [] });
+    const { tray, menus } = harness({ trayEnabled: false, pets: [] });
     await tray.refresh();
     assert.equal(menus.length, 0);
   });

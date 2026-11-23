@@ -8,7 +8,7 @@
 import { defaultLog } from '../log-file.ts';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { CORNER_SET, isValidPetId, PET_DISPLAY_SET } from './constants.ts';
+import { CORNER_SET, isValidPetId } from './constants.ts';
 import { isValidSizePercent } from '../../shared/pet-size.ts';
 import type { ConfigPaths } from './constants.ts';
 import {
@@ -67,8 +67,6 @@ export function saveUserConfig(
     // 传了必须是布尔，没传则走下面的读取侧默认值（内置默认 false = 不固定）。
     const fixedEnabled = pp.fixedEnabled;
     if (fixedEnabled !== undefined && typeof fixedEnabled !== 'boolean') return null;
-    const display = String(pp.display ?? '');
-    if (!PET_DISPLAY_SET.has(display)) return null;
     const pos = pp.position && typeof pp.position === 'object' ? (pp.position as Record<string, unknown>) : {};
     const corner = String(pos.corner ?? '');
     if (!CORNER_SET.has(corner)) return null;
@@ -90,7 +88,6 @@ export function saveUserConfig(
       whisperEnabled,
       workStatusEnabled,
       fixedEnabled,
-      display,
       position: { corner, marginX, marginY },
     };
     if (persona) pet.whisperPrompt = persona;
@@ -255,7 +252,14 @@ export function saveUserConfig(
       if (typeof step.title === 'string' && step.title.trim() !== '') row.title = step.title.trim();
       if (Array.isArray(step.template)) {
         row.template = (step.template as Array<Record<string, unknown>>).map((item) => {
-          const clean: { text: string; color?: string; size?: number; align?: string; bold?: boolean; tierColor?: boolean } = {
+          const clean: {
+            text: string;
+            color?: string;
+            size?: number;
+            align?: string;
+            bold?: boolean;
+            tierColor?: boolean;
+          } = {
             text: String(item.text),
           };
           if (typeof item.color === 'string') clean.color = item.color.toLowerCase();
@@ -271,7 +275,14 @@ export function saveUserConfig(
   }
   if (btp !== undefined) {
     outConfig.bubbleTemplate = (btp as Array<Record<string, unknown>>).map((item) => {
-      const clean: { text: string; color?: string; size?: number; align?: string; bold?: boolean; tierColor?: boolean } = {
+      const clean: {
+        text: string;
+        color?: string;
+        size?: number;
+        align?: string;
+        bold?: boolean;
+        tierColor?: boolean;
+      } = {
         text: String(item.text),
       };
       if (typeof item.color === 'string') clean.color = item.color.toLowerCase();

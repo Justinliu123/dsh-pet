@@ -131,7 +131,7 @@ export function usePetList(
     const template = group[0];
     if (!template) return;
     const id = nextPetId(pets, kind);
-    // 新实例跟着模板走（大小 / 位置 / 显示方式 / 开关），只把身份换成新 id 并挂上种类。
+    // 新实例跟着模板走（大小 / 位置 / 开关），只把身份换成新 id 并挂上种类。
     const draft: Pet = { ...draftPet(template, id), assetRoot: kind };
     setPets((list) => {
       const next = [...list];

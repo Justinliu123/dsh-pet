@@ -61,7 +61,7 @@ export function createLock(transport: Transport, petId: string, alive: () => boo
 
   /** 取锁：先试刷新留下的旧锁，再新建，被占着就等它过期。 */
   async function acquire(): Promise<void> {
-    const path = '/lock?pet=' + encodeURIComponent(petId) + '&surface=web';
+    const path = '/lock?pet=' + encodeURIComponent(petId);
 
     // 1) 先试「我自己的旧锁」（刷新页面留下的）
     const stored = readStored(petId);
@@ -85,9 +85,6 @@ export function createLock(transport: Transport, petId: string, alive: () => boo
     }
 
     const reason = created.reason;
-    if (reason === 'pet-not-displayed') {
-      throw new Error('这只宠物没显示在网页里（display=' + String(created.display) + '）');
-    }
     if (reason !== 'locked') throw new Error('取锁失败：' + String(reason ?? 'unknown'));
 
     // 3) 被占着：可能是上一场还没过期。等一等，别直接判死。
@@ -119,7 +116,7 @@ export function createLock(transport: Transport, petId: string, alive: () => boo
       void (async () => {
         if (!alive() || lockId === null || lost) return;
         try {
-          const r = await transport.call('POST', '/lock?pet=' + encodeURIComponent(petId) + '&surface=web', { lockId });
+          const r = await transport.call('POST', '/lock?pet=' + encodeURIComponent(petId), { lockId });
           // 续不上就是丢了（过期 / 被拖走 / 被抢）——不必等 TTL
           if (r.ok !== true) {
             noteFailure(r.reason);

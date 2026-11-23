@@ -97,7 +97,7 @@ export function createShow(deps: ShowDeps): Show {
     const lease = lock?.id() ?? null;
     if (!alive() || lease === null) return;
     void transport
-      .call('POST', '/broadcast?pet=' + enc(petId) + '&surface=web&lock=' + enc(lease), {
+      .call('POST', '/broadcast?pet=' + enc(petId) + '&lock=' + enc(lease), {
         text,
         duration: ms !== undefined ? ms : CFG.bubbleMs,
         anim: false,
@@ -130,7 +130,7 @@ export function createShow(deps: ShowDeps): Show {
     if (lease === null) throw new Halted();
     const body: Record<string, unknown> = { name };
     if (dir !== undefined) body.facing = dir;
-    const r = await transport.call('POST', '/anim?pet=' + enc(petId) + '&surface=web&lock=' + enc(lease), body);
+    const r = await transport.call('POST', '/anim?pet=' + enc(petId) + '&lock=' + enc(lease), body);
     if (r.ok !== true) {
       lock?.noteFailure(r.reason);
       throw new Error('点播失败：' + String(r.reason ?? 'unknown'));
@@ -187,7 +187,7 @@ export function createShow(deps: ShowDeps): Show {
     if (lease === null) return;
     const body: Record<string, unknown> = { x: clamp(xNorm), y: clamp(yNorm), mode };
     if (mode === 'line') body.duration = Math.max(0, durationMs ?? 0);
-    const r = await transport.call('POST', '/position?pet=' + enc(petId) + '&surface=web&lock=' + enc(lease), body);
+    const r = await transport.call('POST', '/position?pet=' + enc(petId) + '&lock=' + enc(lease), body);
     if (r.ok !== true) lock?.noteFailure(r.reason);
   }
 

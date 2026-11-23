@@ -18,9 +18,6 @@ export interface Rect {
   height: number;
 }
 
-/** 显示位置：决定宠物在浏览器半侧与桌面中的可见性。 */
-export type PetDisplay = 'web' | 'desktop' | 'both' | 'none';
-
 /** 移动动作：动作名 + 可选覆盖参数（未写字段取 moves.default）。 */
 export interface MoveSpec {
   name: string;
@@ -127,7 +124,7 @@ export interface Pet {
   balanceEnabled: boolean;
   /** 是否启用碎碎念：true = 按 eventsRefreshSec.whisper 周期生成一句话并播碎碎念动画，false = 禁用。
    *  缺失默认 true；碎碎念每次生成都会调用当前对话的模型，本地 LLM 单并发时会顶掉正在跑的任务的 KV cache，
-   *  不需要的宠物请显式写 false。display 为 none 的宠物整体跳过：不生成、不调模型。 */
+   *  不需要的宠物请显式写 false。 */
   whisperEnabled: boolean;
   /** 是否启用工作状态联动：true = 监听 DSH 会话事件，按 animations.events.workStatus 切档位动画与气泡。
    *  缺失默认 true。监听不调用模型，无 KV cache 风险。 */
@@ -135,8 +132,6 @@ export interface Pet {
   /** 宠物固定：true = 随机链不抽转向与移动两档（权重按 0 算，份额并入原地小动作），只影响随机链——
    *  右键点播、/anim 接口、事件动画、点击回应与拖拽一律照常。缺失默认 false。 */
   fixedEnabled: boolean;
-  /** 显示位置（必填）：缺失即配置错误，代码不做兜底 */
-  display: PetDisplay;
   position: { corner: Corner; marginX: number; marginY: number };
   /** 实例级人设（pets[].whisperPrompt）：碎碎念与对话共用的系统提示词正文。
    *  写了就取代所属条目顶层那一份（替换而非拼接），没写或空串则回落条目——回落发生在宿主半侧，不是错误。
@@ -267,9 +262,8 @@ export interface ClientConfig {
   /** 点击音效开关：true = 点击宠物时播放内置 click-duck.wav（音量 0.5、100ms 内去重），false = 静音。
    *  内置默认 false（默认静音，不突袭既有用户）。只读 main 条目这一份，pet pack 不单独覆盖。 */
   clickSoundEnabled: boolean;
-  /** 桌面模式系统托盘开关：true = 桌面端启动后在通知区域（macOS 为菜单栏）建托盘，列出配置里全部宠物
-   *  （含 display 为 web/none 的），勾选即可切回桌面；false = 不建。
-   *  缺失默认 true。关掉后「把不在桌面的宠物叫回桌面」在桌面侧没有入口，只能走设置页或网页端右键菜单。 */
+  /** 桌面模式系统托盘开关：true = 桌面端启动后在通知区域（macOS 为菜单栏）建托盘，列出配置里全部宠物；
+   *  false = 不建。缺失默认 true。 */
   trayEnabled: boolean;
   /** 碎碎念配图开关：true = 每次从表情包池随机抽 1 张连同文本显示（碎碎念无上下文，故随机） */
   whisperImageEnabled: boolean;

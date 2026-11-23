@@ -14,8 +14,7 @@ export const zh = {
   avatarChange: '更换',
   avatarUploading: '上传中…',
   avatarUploaded: '头像已更新',
-  petCardHint:
-    '每只宠物独立配置：名字 / 大小 / 显示位置 / 位置 / 偏移 / 四个功能开关。改完点最下面的「保存」即时生效。',
+  petCardHint: '每只宠物独立配置：名字 / 大小 / 位置 / 偏移 / 四个功能开关。改完点最下面的「保存」即时生效。',
   globalTitle: '全局开关',
   globalHint:
     '所有宠物共用（pet pack 可在自己种类文件里单独覆盖）。这几个开关只改本地状态，随「保存」整包写入用户配置（不做即时写入）；系统通知在保存后即时重读，无需刷新页面。',
@@ -40,7 +39,6 @@ export const zh = {
   shortcutRowPaste: '粘贴图片',
   shortcutRowTodo: '待办事项',
   shortcutRowSleep: '睡觉 / 起来',
-  shortcutRowDisplay: '显示位置',
   shortcutRowSidebar: '打开侧栏对话',
   shortcutGroupPet: '桌宠快捷键',
   shortcutGroupPetHint: '网页端鼠标停在宠物上即可；桌面宠物窗口要先点一下宠物，拿到键盘焦点后才生效。',
@@ -76,12 +74,6 @@ export const zh = {
   fixedEnabled: '宠物固定',
   fixedEnabledHint:
     '启用后随机动画不再让宠物自己转向或走开，只播原地待机与随机小动作；右键菜单点播、接口触发、余额/碎碎念/工作状态动画不受影响。',
-  displayLabel: '显示位置',
-  displayHint: 'web=仅浏览器 / desktop=仅桌面 / both=两者都显示 / none=都不显示',
-  'display.web': '仅浏览器',
-  'display.desktop': '仅桌面',
-  'display.both': '两者都显示',
-  'display.none': '都不显示',
   cornerLabel: '位置',
   'corner.top-left': '左上角',
   'corner.top-right': '右上角',
@@ -148,7 +140,7 @@ export const zh = {
     '多屏用户：开了之后宠物只在当前所在那块屏幕内活动——甩出去的宠物只在松手时所在那块屏内弹（屏缝当墙，不飞到隔壁屏），自主漫游也只在当前所在那块屏内走（越出屏缝的那一步直接取消）。关掉则照常跨屏飞行 / 跨屏行走。只影响桌面模式——浏览器 overlay 本来就只在视口内活动。',
   trayToggle: '系统托盘',
   trayToggleHint:
-    '桌面模式启动后在通知区域（macOS 为菜单栏）常驻一个图标，列出配置里的全部宠物，勾选就能切换显示位置——包括当前不在桌面、没有窗口可右键的那些。关掉之后要把宠物叫回桌面，只能开浏览器用设置页，或在网页端那只宠物身上右键。Windows 本来就会把它折叠进「隐藏的图标」面板。仅影响桌面模式。',
+    '桌面模式启动后在通知区域（macOS 为菜单栏）常驻一个图标，点开只有「退出」一项——没有宠物窗口时也能关掉桌宠。Windows 本来就会把它折叠进「隐藏的图标」面板。仅影响桌面模式。',
   voiceTitle: '语音播报',
   voiceHint:
     '桌宠出声的四个开关与音色：每类语音各一个开关，互不从属。默认全关，随「保存」写入用户配置（不做即时写入）。',

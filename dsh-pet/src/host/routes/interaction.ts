@@ -6,7 +6,7 @@
  * @module dsh-pet/src/host/routes/interaction
  */
 import { readAllConfig } from '../config.ts';
-import { normalizeSurface, voiceTargetOfSurface } from '../surface.ts';
+import { VOICE_TARGET } from '../voice-target.ts';
 import {
   decideBroadcast,
   decideBubbleClear,
@@ -21,8 +21,7 @@ import { failResult, invalidJson, methodNotAllowed, okResult } from './result.ts
 
 /** 会话交互领域：未命中返回 undefined，命中返回应答。 */
 export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteInput): Promise<RouteResult | undefined> {
-  const { configPaths, lock, lockBlocked, memeDirsFor, publishWhisper, requirePet, sleep, state, surfaceBlocked } =
-    deps;
+  const { configPaths, lock, lockBlocked, memeDirsFor, publishWhisper, requirePet, sleep, state } = deps;
   const { body, method, rest, url } = input;
 
   // 占用锁：POST /lock?pet= 取锁 / 续期二合一（lockId 给了 = 续期，续期即心跳，丢了回 lock-lost），
@@ -42,8 +41,7 @@ export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteIn
     const o = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
     try {
       // pet 必填且必须真实存在（与 /anim、/broadcast 同一口径，见 requirePet）
-      // surface 只对取锁这一支校验：`/lock/release` 必须永远能成功（否则宠物中途被隐藏就撤不掉锁）
-      const who = requirePet(url.searchParams, () => readAllConfig(configPaths), { surface: !isRelease });
+      const who = requirePet(url.searchParams, () => readAllConfig(configPaths));
       if (!who.ok) return who.res;
       const petId = who.petId;
       if (isRelease) {
@@ -81,16 +79,9 @@ export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteIn
     try {
       // pet 必填且必须真实存在：空串会让人设/配图按 main 条目取、生成结果写进没人消费的
       // `pets[""].say`，还回 ok:true（钱花了、话丢了、调用方以为成功）。
-      const who = requirePet(url.searchParams, () => readAllConfig(configPaths), { surface: true });
+      const who = requirePet(url.searchParams, () => readAllConfig(configPaths));
       if (!who.ok) return who.res;
-      // 谁点的谁念：请求面在 requirePet 里已被 displayCovers 校验过，具体到一端就用它；
-      // both / any 不足以指定一端，留空交给生成函数按 display 推导。
-      const want = normalizeSurface(url.searchParams.get('surface'));
-      const r = await publishWhisper(
-        who.petId,
-        url.searchParams.get('image') ?? undefined,
-        want === null ? undefined : voiceTargetOfSurface(want),
-      );
+      const r = await publishWhisper(who.petId, url.searchParams.get('image') ?? undefined);
       if (r.ok) return okResult({ ok: true, text: r.text, ...(r.image ? { image: r.image } : {}) });
       // 真实 reason 原样透出（独立模式是 `provider-missing`，见 ./whisper 的联合体）——
       // 不再把一切失败糊成 generate-error，调用方据此能分清「没配模型」与「生成炸了」。
@@ -135,9 +126,6 @@ export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteIn
         memeDirs: memeDirsFor,
       });
       if (!d.ok) return failResult(d.reason, d.message);
-      // 显示端对齐：不满足 → pet-not-displayed（+ 实际 display），早于锁门禁
-      const noSurface = surfaceBlocked(cfg, d.petId, url.searchParams);
-      if (noSurface) return noSurface;
       // 占用门禁：有锁时只有持锁者能投喂（无锁恒放行，见 lockBlocked）
       const blocked = lockBlocked(d.petId, url.searchParams);
       if (blocked) return blocked;
@@ -145,17 +133,14 @@ export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteIn
       // 实际生效的时长与联动开关，调用方不用自己猜缺省是多少。
       // 配图两种形态二选一（判定层保证）：url 形态写 url，名称形态写池内规范名，都没有则纯文本。
       const pic = d.url !== undefined ? { url: d.url } : d.image !== undefined ? { image: d.image } : {};
-      // 与手动碎碎念同一口径：调用方用 ?surface= 明说了「我希望这句显示在哪一端」，就由那一端念；
-      // both / any 不足以指定一端，留空不写（消费端据此不念）。
+      // 与手动碎碎念同一口径：桌宠只显示在桌面端，这一句就由桌面端念。
       // speak 是第二道门：投喂默认只弹气泡，调用方显式要了才出声（见 normalizeBroadcastVoice）。
-      const want = normalizeSurface(url.searchParams.get('surface'));
-      const voiceTo = want === null ? undefined : voiceTargetOfSurface(want);
       state.writePet(d.petId, 'say', {
         text: d.text,
         ...pic,
         duration: d.duration,
         anim: d.anim,
-        ...(speak && voiceTo ? { voiceTo } : {}),
+        ...(speak ? { voiceTo: VOICE_TARGET } : {}),
       });
       return okResult({ ok: true });
     } catch (e) {
@@ -177,8 +162,6 @@ export async function handleInteractionRoutes(deps: PetRouteDeps, input: RouteIn
         requested: String(url.searchParams.get('pet') ?? ''),
       });
       if (!d.ok) return failResult(d.reason, d.message);
-      const noSurface = surfaceBlocked(cfg, d.petId, url.searchParams);
-      if (noSurface) return noSurface;
       const blocked = lockBlocked(d.petId, url.searchParams);
       if (blocked) return blocked;
       state.writePet(d.petId, 'say', { clear: true });

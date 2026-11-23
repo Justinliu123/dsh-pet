@@ -51,7 +51,6 @@ function makeDeps(overrides: Partial<PetRouteDeps> = {}): {
       String(params.get('pet') ?? '') === 'main'
         ? { ok: true as const, petId: 'main', entry: 'main', conf: {} }
         : { ok: false as const, res: failResult('unknown-pet', '没有这只桌宠') },
-    surfaceBlocked: () => null,
     lockBlocked: () => null,
     environment: async (opts?: { fresh?: boolean; city?: string }) => {
       envCalls.push({ fresh: opts?.fresh === true, ...(opts?.city === undefined ? {} : { city: opts.city }) });
@@ -145,14 +144,15 @@ describe('/environment —— 带 pet：写 S 供气泡使用', () => {
     assert.deepEqual(envCalls, [], '门禁拦住的请求不该产生网络请求');
   });
 
-  test('显示端门禁拦住 → 原样返回，不查环境、不写 S', async () => {
-    const { deps, writes, envCalls } = makeDeps({
-      surfaceBlocked: () => failResult('pet-not-displayed', '这只宠物当前不在这一端'),
-    } as Partial<PetRouteDeps>);
+  test('宠物恒可见：没有「当前不在这一端」这个失败分支', async () => {
+    // 显示位置已收敛为「只显示在桌面端」，路由层不再有显示端门禁——deps 里连那个键都没有。
+    const { deps, writes, envCalls } = makeDeps();
+    assert.equal('surfaceBlocked' in deps, false, '显示端门禁已从路由依赖里移除');
     const b = body(await handleEnvironmentRoutes(deps, post('?pet=main')));
-    assert.equal(b.reason, 'pet-not-displayed');
-    assert.deepEqual(envCalls, []);
-    assert.deepEqual(writes, []);
+    assert.equal(b.ok, true, '带 pet 不该再被「不在这一端」拦下');
+    assert.equal(b.petId, 'main');
+    assert.equal(envCalls.length, 1, '没有显示端门禁 → 照样去查环境');
+    assert.equal(writes.length, 1, '照样写 S 供气泡使用');
   });
 
   test('占用锁门禁拦住 → 原样返回', async () => {

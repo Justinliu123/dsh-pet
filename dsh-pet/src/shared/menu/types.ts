@@ -5,7 +5,6 @@
  * 必须始终成立：叶子带 action 或 anim（至少其一），分支必须带 children，二者不可兼得。
  * @module dsh-pet/src/shared/menu/types
  */
-import { type PetDisplay } from '../types.ts';
 
 /** 叶子：可点击的菜单项。 */
 export interface MenuLeaf {
@@ -13,9 +12,8 @@ export interface MenuLeaf {
   /** 播放的动画名（点播动作）；action 优先于 anim */
   anim?: string;
   /** 自定义动作：打开网站 / 查看余额 / 查询天气 / 立即碎碎念 / 打开对话弹窗 / 打开待办面板 / 回到初始位置 /
-   *  重载配置（桌面端专属，重启桌面 Helper 并按最新配置重建窗口）/ 改显示位置（目标值见 display，
-   *  两端都注入）/ 第三方菜单项（只把 owner 与 label 上报给注册方，具体做什么由它决定）。
-   *  手动触发均不受 whisperEnabled 影响——那个字段只关自动轮询。 */
+   *  重载配置（桌面端专属，重启桌面 Helper 并按最新配置重建窗口）/ 第三方菜单项（只把 owner 与 label 上报给注册方，
+   *  具体做什么由它决定）。手动触发均不受 whisperEnabled 影响——那个字段只关自动轮询。 */
   action?:
     | 'open-site'
     | 'show-balance'
@@ -25,12 +23,9 @@ export interface MenuLeaf {
     | 'todo'
     | 'home'
     | 'reload'
-    | 'set-display'
     | 'sleep'
     | 'wake'
     | 'third-party';
-  /** set-display 的目标显示位置（与设置页的下拉框同一套取值） */
-  display?: PetDisplay;
   /** third-party：注册它的 owner（身份键，只用于回传，不显示）；同一个 owner 的项收在同一分组下，
    *  只有一项时跳过这层直接平铺。 */
   owner?: string;

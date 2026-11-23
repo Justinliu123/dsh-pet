@@ -5,18 +5,8 @@
  * 条目级字段必须吹进每只实例：多实例共享所属条目的同一份值。
  * @module dsh-pet/src/shared/config
  */
-import type { Animations, FontConfig,
-  BubbleClickPages, ModelSelection, Pet, PetDisplay, PhysicsParams, Weights } from './types.ts';
+import type { Animations, FontConfig, BubbleClickPages, ModelSelection, Pet, PhysicsParams, Weights } from './types.ts';
 import type { BubbleClickStep, BubbleRowTemplate } from './balance/types.ts';
-
-/** 显示位置白名单。 */
-export const PET_DISPLAYS: PetDisplay[] = ['web', 'desktop', 'both', 'none'];
-
-/** 该宠物是否参与浏览器半侧渲染。 */
-export const isWebVisible = (display: PetDisplay): boolean => display === 'web' || display === 'both';
-
-/** 该宠物是否参与桌面模式（Electron 透明窗）渲染。 */
-export const isDesktopVisible = (display: PetDisplay): boolean => display === 'desktop' || display === 'both';
 
 /** 把成品聚合拍平成渲染用宠物列表。
  *  条目级字段（animations / physics / font 等）由所属条目一份、多实例共享；assetRoot 取条目 key，
@@ -35,7 +25,7 @@ export function flattenConfigPets(merged: Record<string, Record<string, unknown>
         font: conf.font as FontConfig | undefined,
         bubbleClickPages: conf.bubbleClickPages as BubbleClickPages | undefined,
         bubbleClickSteps: conf.bubbleClickSteps as BubbleClickStep[] | undefined,
-    bubbleTemplate: conf.bubbleTemplate as BubbleRowTemplate[] | undefined,
+        bubbleTemplate: conf.bubbleTemplate as BubbleRowTemplate[] | undefined,
         confineToScreen: conf.confineToScreen as boolean | undefined,
         workStatusTexts: conf.workStatusTexts as string[][] | undefined,
         // 睡觉文案：渲染端要能「睡着时点对话/碎碎念就弹拒绝台词」，所以必须在拍平时带出来

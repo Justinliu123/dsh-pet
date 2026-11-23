@@ -676,39 +676,7 @@ describe('pet 必填 —— 缺省一律 pet-required（issue #122 第 1 条：�
   });
 });
 
-describe('surface 必填 —— 缺省/非法一律 bad-request，且短路在读盘之前（issue #122 第 1 条）', () => {
-  // 与 pet 空串同一处境：surface 的参数级校验放在读配置之前，所以这一组在"配置不可达"的
-  // 源码形态下照样能测——断言 reason 同时钉住了短路顺序（是 bad-request，不是 generate-error）。
-  test('/lock、/whisper、/chat POST：不给 surface / 非法值 → bad-request', async () => {
-    const cases: Array<[string, string, string | undefined]> = [
-      ['lock', 'POST', '{}'],
-      ['whisper', 'POST', undefined],
-      ['chat', 'POST', JSON.stringify({ text: '在吗' })],
-    ];
-    for (const [path, method, body] of cases) {
-      for (const q of ['', '&surface=nope', '&surface=WEB', '&surface=']) {
-        const r = await call(`/dsh-pet-7340/${path}?pet=main${q}`, method, body);
-        assert.equal(r.status, 200, `${path}${q} 业务失败走 200 + ok:false`);
-        const b = JSON.parse(r.body) as { ok: boolean; reason: string };
-        assert.equal(b.ok, false, `${path}${q}`);
-        assert.equal(b.reason, 'bad-request', `${path}${q} 应是 bad-request（不是 generate-error）`);
-      }
-    }
-  });
-
-  test('/chat GET 与 /lock/release 不校验 surface：照旧走到读配置那一步（generate-error）', async () => {
-    // 释放必须永远能成功（否则宠物中途被隐藏就撤不掉锁）；GET 是读记忆，与显示在哪一端无关。
-    // 两者都忽略 surface——连非法值也不该报 bad-request。
-    const g = await call('/dsh-pet-7340/chat?pet=main&surface=nope');
-    assert.equal(g.status, 200);
-    assert.equal((JSON.parse(g.body) as { reason: string }).reason, 'generate-error');
-    const rel = await call('/dsh-pet-7340/lock/release?pet=main&surface=nope', 'POST', '{}');
-    assert.equal(rel.status, 200);
-    assert.equal((JSON.parse(rel.body) as { reason: string }).reason, 'generate-error');
-  });
-});
-
-describe('/pose —— 桌面端实况（GET 查询 / POST 上报），与 surface 无关', () => {
+describe('/pose —— 桌面端实况（GET 查询 / POST 上报），显示位置已收敛', () => {
   // 与 /whisper、/chat 的"pet 必填"同一处境：这些断言在"配置不可达"的源码形态下照样成立，
   // 正好钉住短路顺序（pet 先报，surface 根本不参与）。
   test('/pose：不给 pet → pet-required；方法不对 → 405', async () => {
@@ -723,9 +691,9 @@ describe('/pose —— 桌面端实况（GET 查询 / POST 上报），与 surfa
     assert.equal((await call('/dsh-pet-7340/pose/report?pet=main', 'POST', '{ 不是 json')).status, 400);
   });
 
-  test('两条都**不校验** surface：连非法值也照旧走到读配置那一步', async () => {
-    // 它们是读 / 内部端点（同 GET /chat、GET /playback）——surface 只加在会产生渲染端可见效果
-    // 的动作端点上。这条同时钉住"以后别顺手把 surface 加进来"。
+  test('surface 参数被忽略：连非法值也不报错，照旧走到读配置那一步', async () => {
+    // 显示位置收敛为「只显示在桌面端」后，surface 参数整个不再参与判定：传了、传错都一样，
+    // 请求继续往下走，直到读配置那一步才可能失败。这条钉住"surface 已被彻底忽略"。
     const g = await call('/dsh-pet-7340/pose?pet=main&surface=nope');
     assert.equal(g.status, 200);
     assert.equal((JSON.parse(g.body) as { reason: string }).reason, 'generate-error');
@@ -758,35 +726,13 @@ describe('?rounds= —— 非法值 bad-request，合法值不误杀（issue #14
   });
 });
 
-describe('/pet-display —— 业务失败 200 + 实体，协议失败用真实状态码', () => {
-  test('GET → 405 + method-not-allowed（方法错是协议失败，不由 handler 决定）', async () => {
-    const r = await call('/dsh-pet-7340/pet-display');
-    assert.equal(r.status, 405);
-    assert.equal((JSON.parse(r.body) as { reason: string }).reason, 'method-not-allowed');
-  });
-
-  test('请求体不是合法 JSON → 400 + invalid-json（协议失败）', async () => {
-    const r = await call('/dsh-pet-7340/pet-display', 'POST', '{ 不是 json');
-    assert.equal(r.status, 400);
-    assert.equal((JSON.parse(r.body) as { reason: string }).reason, 'invalid-json');
-  });
-
-  test('缺 id → 200 + pet-required（与 9 条 ?pet= 路由同一对词汇）', async () => {
-    for (const body of [{ display: 'none' }, { id: '   ', display: 'none' }, { display: 'none' }]) {
-      const r = await call('/dsh-pet-7340/pet-display', 'POST', JSON.stringify(body));
-      assert.equal(r.status, 200, JSON.stringify(body));
-      const parsed = JSON.parse(r.body) as { ok: boolean; reason: string };
-      assert.equal(parsed.ok, false);
-      assert.equal(parsed.reason, 'pet-required');
-    }
-  });
-
-  test('display 非法 → 200 + bad-request（白名单 web/desktop/both/none）', async () => {
-    const r = await call('/dsh-pet-7340/pet-display', 'POST', JSON.stringify({ id: 'main', display: 'nope' }));
-    assert.equal(r.status, 200);
-    const body = JSON.parse(r.body) as { ok: boolean; reason: string };
-    assert.equal(body.ok, false);
-    assert.equal(body.reason, 'bad-request');
+describe('/pet-display —— 端点已删除，不得复活', () => {
+  test('POST 不再是业务端点：不再回 200 + 失败实体', async () => {
+    // 显示位置收敛为「只显示在桌面端」后，改显示位置这个端点整个没了（实现文件与路由分发都删了）。
+    // 这条是回归护栏：请求体里的 display 也不再被任何端点认，别让人顺手把它加回来。
+    const r = await call('/dsh-pet-7340/pet-display', 'POST', JSON.stringify({ id: 'main', display: 'none' }));
+    assert.equal(r.status, 400, '端点已删除：未知路径落到素材兜底，不再是业务端点');
+    assert.equal(r.body.includes('"reason"'), false, '不该再回业务失败实体');
   });
 });
 

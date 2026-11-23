@@ -22,7 +22,6 @@ const pet = (id: string, over: Partial<Pet> = {}): Pet => ({
   whisperEnabled: false,
   workStatusEnabled: false,
   fixedEnabled: false,
-  display: 'web',
   position: { corner: 'top-right', marginX: 10, marginY: 10 },
   ...over,
 });

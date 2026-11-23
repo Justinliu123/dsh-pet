@@ -195,12 +195,9 @@ if (BRIDGE) {
 // 所以本进程开一个 127.0.0.1 随机端口 HTTP 回调，按 id 唤醒等待中的请求；素材只回绝对路径，
 // 由本进程自行读盘应答（二进制不过管道）。协议行统一前缀 BRIDGE_PREFIX，宿主据此区分协议与日志。
 
-// 系统托盘：桌面端的显示开关。
-// 托盘放在本进程，是因为它是桌面模式唯一不进浏览器的入口：某只宠物的 display 改成 web/none 后
-// 桌面窗口与它自己的右键菜单一起消失，只有托盘还能在桌面侧把它切回来。
+// 系统托盘：桌面端唯一不进浏览器的入口，菜单里只有「退出」——没有宠物窗口时也能关掉桌宠。
 // 它不是非有不可：main 条目的 trayEnabled 为 false 时不建托盘，宿主也就不再为本进程常驻。
-// 数据不新增通道：读写都走渲染端在用的同一条 bridge。菜单是静态的——每次切换 display 宿主都会重启
-// 本进程（syncDesktop），新进程按新配置重建菜单，所以不需要「重建菜单刷新勾选」的逻辑。
+// 数据不新增通道：读写都走渲染端在用的同一条 bridge。
 
 const PET_ROUTE = '/dsh-pet-7340';
 const ORIGIN = new URL(process.env.DSH_PET_CONFIG_URL || 'http://127.0.0.1:3080/dsh-pet-7340/config').origin;
@@ -239,8 +236,8 @@ const tray = createTray({
 });
 
 /**
- * 应用模式的重建钩子：同进程里没有「重启 helper 进程」这条路，宿主改完显示位置会调它——
- * 关窗 → 按新的 DSH_PET_PETS 重建 → 刷新托盘勾选。
+ * 应用模式的重建钩子：同进程里没有「重启 helper 进程」这条路，宿主改完配置会调它——
+ * 关窗 → 按新的 DSH_PET_PETS 重建 → 刷新托盘。
  * 双进程模式不注册：那边重启进程本身就是重建，注册了反而多一条没人走的路径。
  */
 if (process.env.DSH_PET_IN_PROCESS === '1') {
@@ -317,7 +314,7 @@ app.whenReady().then(() => {
 });
 
 // 退出时销毁托盘图标：不销毁会在 Windows 通知区留下「幽灵图标」（鼠标划过才消失）。
-// 宿主改 display 时是 SIGTERM/SIGKILL 硬杀，Windows 上拦不到，所以这条只覆盖优雅退出。
+// 宿主改配置时是 SIGTERM/SIGKILL 硬杀，Windows 上拦不到，所以这条只覆盖优雅退出。
 app.on('before-quit', () => {
   petWindows.stopTaskbarWatchdog();
   if (!tray.exists()) return;

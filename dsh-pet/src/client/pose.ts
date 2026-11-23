@@ -27,7 +27,7 @@ export function registerPose(petId: string, read: () => Pose): () => void {
 }
 
 /**
- * 读某只宠物在这一页的实况；不在这页（未注册 / 未挂载 / `display` 不含 `web`）时为 `null`。
+ * 读某只宠物在这一页的实况；不在这页（未注册 / 未挂载）时为 `null`。
  * 与桌面端 `GET /pose` 的「明确不可用」同义；每次调用都取当前值，走位、拖拽中途也能读到。
  */
 export function readPose(petId: string): Pose | null {

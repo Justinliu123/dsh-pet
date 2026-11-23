@@ -2,7 +2,7 @@
  * 环境查询入口：/environment 查此刻的城市与天气，带宠物时写进轮询状态供气泡使用。
  *
  * 数据只有一个来源（./environment），本模块只做门禁、写叶子与应答形态。
- * `pet` 缺省 = 纯查询，不写 S；给了就必须存在，并过显示端、占用锁两道门禁
+ * `pet` 缺省 = 纯查询，不写 S；给了就必须存在，并过占用锁门禁
  * （睡觉门禁在分发器里按 rest 统一挡，见 ./index 的 sleepGated）。
  * @module dsh-pet/src/host/routes/environment
  */
@@ -13,7 +13,7 @@ import { failResult, methodNotAllowed, okResult } from './result.ts';
 
 /** 环境领域：未命中返回 undefined，命中返回应答。 */
 export async function handleEnvironmentRoutes(deps: PetRouteDeps, input: RouteInput): Promise<RouteResult | undefined> {
-  const { configPaths, environment, lockBlocked, requirePet, state, surfaceBlocked } = deps;
+  const { configPaths, environment, lockBlocked, requirePet, state } = deps;
   const { method, rest, url } = input;
 
   if (rest !== 'environment') return undefined;
@@ -24,12 +24,9 @@ export async function handleEnvironmentRoutes(deps: PetRouteDeps, input: RouteIn
   if (requested !== '') {
     try {
       const cfg = readAllConfig(configPaths);
-      const who = requirePet(url.searchParams, () => cfg, { surface: true });
+      const who = requirePet(url.searchParams, () => cfg);
       if (!who.ok) return who.res;
       petId = who.petId;
-      // 与 /broadcast 同一套门禁顺序：先看能不能显示，再看有没有被占用
-      const noSurface = surfaceBlocked(cfg, petId, url.searchParams);
-      if (noSurface) return noSurface;
       const blocked = lockBlocked(petId, url.searchParams);
       if (blocked) return blocked;
     } catch (e) {

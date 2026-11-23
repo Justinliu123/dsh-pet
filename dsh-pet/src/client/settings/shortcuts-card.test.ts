@@ -130,7 +130,6 @@ describe('ShortcutsCard —— 快捷键卡', () => {
       'shortcutRowPaste',
       'shortcutRowTodo',
       'shortcutRowSleep',
-      'shortcutRowDisplay',
       'shortcutRowSidebar',
     ]) {
       assert.ok(text.includes(key), key + ' 应该出现');

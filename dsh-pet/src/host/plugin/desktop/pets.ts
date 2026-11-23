@@ -12,22 +12,16 @@ import type { DesktopHelperDeps } from './types.ts';
 /** DesktopPets的输入。 */
 export type DesktopPetsInput = Pick<DesktopHelperDeps, 'configPaths' | 'effectivePetList' | 'log'>;
 
-/** 该宠物是否参与桌面模式（Electron 透明窗）。 */
-const isDesktopVisible = (display: unknown): boolean => display === 'desktop' || display === 'both';
-
-/** 一次现读的判定结果（`flattenPetList` 的元素形状由配置层决定，这里只关心数量与 display）。 */
+/** 一次现读的判定结果（`flattenPetList` 的元素形状由配置层决定，这里只关心数量）。 */
 interface DesktopDecision {
-  /** 配置里的全部宠物。 */
+  /** 配置里的全部宠物；桌宠只在桌面端显示，每一只都进桌面窗。 */
   pets: Array<Record<string, unknown>>;
-  /** 参与桌面模式的宠物。 */
-  desktopPets: Array<Record<string, unknown>>;
 }
 
 /** 现读配置并算出判定；读不出来时抛出，由各取值函数决定降级方式。 */
 function readDecision(configPaths: ConfigPaths): DesktopDecision {
   const merged = readAllConfig(configPaths);
-  const pets = flattenPetList(merged);
-  return { pets, desktopPets: pets.filter((pet) => isDesktopVisible(pet.display)) };
+  return { pets: flattenPetList(merged) };
 }
 
 /**
@@ -42,7 +36,7 @@ export function createDesktopPets(deps: DesktopPetsInput) {
   /** 现在有没有桌面宠物；读配置失败按「没有」处理——宁可不起 helper，也不起一个没有宠物的空进程。 */
   const getHasDesktopPet = (): boolean => {
     try {
-      return readDecision(configPaths).desktopPets.length > 0;
+      return readDecision(configPaths).pets.length > 0;
     } catch {
       return false;
     }
@@ -57,26 +51,24 @@ export function createDesktopPets(deps: DesktopPetsInput) {
     }
   };
 
-  /** 参与桌面窗的宠物（给 helper 的启动参数）；读失败返回空列表。 */
+  /** 进桌面窗的宠物（给 helper 的启动参数）；读失败返回空列表。 */
   const desktopPetList = (): Array<{ id: string; size: number }> => {
     try {
-      return effectivePetList()
-        .filter((pet) => isDesktopVisible(pet.display))
-        .map((pet) => ({ id: String(pet.id), size: Number(pet.size) }));
+      return effectivePetList().map((pet) => ({ id: String(pet.id), size: Number(pet.size) }));
     } catch {
       return [];
     }
   };
 
-  /** 打一行判定日志（诊断用）：设置页显示「仅桌面」却没有 helper 进程时，这行能分辨宿主读到的是 web 还是 desktop。 */
+  /** 打一行判定日志（诊断用）：桌面宠物一只都没有时，这行能分辨宿主读到了什么。 */
   const logDesktopDecision = (): void => {
     try {
-      const { pets, desktopPets } = readDecision(configPaths);
+      const { pets } = readDecision(configPaths);
       const trayOn = readAllConfig(configPaths).main?.trayEnabled !== false;
       log.info(
-        `[dsh-pet] 桌面判定：pets=${pets.length}，桌面可见=${desktopPets.length}` +
-          `（${desktopPets.map((pet) => String(pet.id)).join(',') || '无'}）→` +
-          ` hasDesktopPet=${desktopPets.length > 0} tray=${trayOn}`,
+        `[dsh-pet] 桌面判定：pets=${pets.length}` +
+          `（${pets.map((pet) => String(pet.id)).join(',') || '无'}）→` +
+          ` hasDesktopPet=${pets.length > 0} tray=${trayOn}`,
       );
     } catch (e) {
       log.warn(`[dsh-pet] 宠物配置非法，桌面模式已跳过：${e instanceof Error ? e.message : String(e)}`);

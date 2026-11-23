@@ -21,7 +21,7 @@ import { createRequestSecurity } from './request-security.ts';
 import { writeStandaloneRuntime } from './runtime-state.ts';
 import { createStandaloneContext, type RegisteredRoute, type StandaloneLogger } from './context.ts';
 import { createStandaloneLogger } from './logger.ts';
-import { configPathsAt, describePets, isDesktopVisible, parseArgs, USAGE } from './options.ts';
+import { configPathsAt, describePets, parseArgs, USAGE } from './options.ts';
 import { bridgeStateOfContext, createDshBridge, type DshBridge } from './dsh-bridge.ts';
 import { startAppPresence, type AppPresenceHandle } from './presence.ts';
 import { listenStandaloneServer } from './server.ts';
@@ -163,7 +163,6 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
       `读配置失败（服务照常运行，相关端点会显式报错）：${error instanceof Error ? error.message : String(error)}`,
     );
   }
-  const desktopVisible = pets.filter(isDesktopVisible);
   for (const line of [
     '',
     '===== dsh-pet 独立模式（不需要 DSH）=====',
@@ -171,9 +170,7 @@ async function run(logger: StandaloneLogger, options: { port: number }): Promise
     `  路由        http://127.0.0.1:${server.port}${ROUTE_SEGMENT}/`,
     `  配置        ${configSource}`,
     `  宠物        ${describePets(pets)}`,
-    desktopVisible.length === 0
-      ? '  桌面小窗    0 只：display 需要 desktop 或 both 才会出现透明小窗（服务仍在运行）'
-      : `  桌面小窗    ${desktopVisible.length} 只`,
+    `  桌面小窗    ${pets.length} 只`,
     ai.isReady()
       ? '  AI          本机 API 已启用；自动碎碎念遵循设置页开关'
       : '  AI          未配置或未启用，不发送模型请求；右键“打开 AI 设置”后在本机填写',

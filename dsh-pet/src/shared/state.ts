@@ -193,7 +193,7 @@ export type SayCue =
     }
   | { kind: 'clear' };
 
-/** 一次说话该由哪一端念；与 src/host/surface 的同名联合体是两份（宿主不 import src/shared），改动时两边一起改。 */
+/** 一次说话该由哪一端念；宿主半侧另有一份同名联合体（宿主不 import src/shared），改动时两边一起改。 */
 export type VoiceTarget = 'web' | 'desktop';
 
 /** 类型收窄：宠物说话叶子 → SayCue（形状非法或空文本 → null，消费端跳过这一拍）。

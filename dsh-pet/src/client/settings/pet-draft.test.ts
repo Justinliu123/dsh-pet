@@ -22,7 +22,6 @@ const template = {
   whisperEnabled: false,
   workStatusEnabled: true,
   fixedEnabled: false,
-  display: 'front',
   position: { corner: 'bottom-left', marginX: 40, marginY: 60 },
 } as unknown as Pet;
 
@@ -67,7 +66,6 @@ describe('draftPet —— 新宠物草稿', () => {
     const draft = draftPet(template, 'pet-2');
     assert.equal(draft.size, 260);
     assert.equal(draft.balanceEnabled, true);
-    assert.equal(draft.display, 'front');
     assert.deepEqual(draft.position, { corner: 'bottom-left', marginX: 40, marginY: 60 });
 
     draft.position.marginX = 1;

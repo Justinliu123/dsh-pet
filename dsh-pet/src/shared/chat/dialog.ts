@@ -1,6 +1,6 @@
 /**
  * 对话输入弹窗的挂载与生命周期：定位、关闭、发送。
- * 两端共用同一份实现；它只经注入的 baseUrl/surface 说话，不读配置、不读写记忆。
+ * 两端共用同一份实现；它只经注入的 baseUrl 说话，不读配置、不读写记忆。
  * 回复不经响应回传展示：POST 的响应里也有正文，但本组件不用它——回复统一从 /state 的
  * pets.<id>.say 走气泡展示，onSent 只用来催促调用方取一拍。
  * @module dsh-pet/src/shared/chat/dialog
@@ -36,7 +36,7 @@ export interface ChatDialogMount {
 interface SendBinding {
   readonly input: HTMLTextAreaElement;
   readonly err: HTMLElement;
-  /** 已含 `?pet=&surface=` 的对话地址。 */
+  /** 已含 `?pet=` 的对话地址。 */
   readonly url: string;
   readonly isClosed: () => boolean;
   /** 发送成功（弹窗尚未关闭）。 */
@@ -124,8 +124,6 @@ export interface ChatDialogOptions {
   petId: string;
   /** 端点基址：浏览器默认相对路径，桌面传绝对 URL（file:// 页面需要绝对）。 */
   baseUrl?: string;
-  /** 这个弹窗开在哪一端：POST /chat 的 ?surface= 是必填的，宿主据此提前拒掉不可能的组合。 */
-  surface: 'web' | 'desktop';
   x: number;
   y: number;
   /** 发送成功后调用（弹窗此时已关闭）：回复本身不从这里回传，数据只有 /state 一个出口。 */
@@ -152,10 +150,10 @@ export interface ChatDialogOptions {
  *  clamp 由调用方给：桌面传「窗口 ∩ 工作区」，宠物贴边时弹窗照样完整显示、窗口零移动。 */
 export function mountChatDialog(opts: ChatDialogOptions): ChatDialogMount {
   injectChatCss();
-  const { petId, surface, x, y, onSent, onClose, clamp } = opts;
+  const { petId, x, y, onSent, onClose, clamp } = opts;
   const baseUrl = opts.baseUrl ?? ROUTE_PATH + '/chat';
-  // `surface` 必填（宿主校验）；这个 URL 只用于 POST 发送——GET 读记忆那条路不需要它
-  const withPet = baseUrl + '?pet=' + encodeURIComponent(petId) + '&surface=' + surface;
+  // 这个 URL 只用于 POST 发送——GET 读记忆那条路不需要它
+  const withPet = baseUrl + '?pet=' + encodeURIComponent(petId);
   const c =
     clamp && Number.isFinite(clamp.x + clamp.y + clamp.w + clamp.h)
       ? clamp

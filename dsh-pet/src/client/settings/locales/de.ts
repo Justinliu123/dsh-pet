@@ -40,7 +40,6 @@ export const de: Record<Key, string> = {
   shortcutRowPaste: 'Bild einfügen',
   shortcutRowTodo: 'Aufgaben',
   shortcutRowSleep: 'Schlafen / Aufwachen',
-  shortcutRowDisplay: 'Anzeigeposition',
   shortcutRowSidebar: 'Seitenleisten-Chat öffnen',
   shortcutGroupPet: 'Pet-Tastenkürzel',
   shortcutGroupPetHint:
@@ -80,12 +79,6 @@ export const de: Record<Key, string> = {
   fixedEnabled: 'Pet fixieren',
   fixedEnabledHint:
     'Wenn aktiv, dreht sich das Pet bei Zufallsanimationen nicht mehr selbst um und läuft nicht weg – es spielt nur Leerlauf und kleine Aktionen am Platz. Rechtsklick-Auswahl, API-Auslöser sowie Guthaben-/Flüstern-/Arbeitsstatus-Animationen sind nicht betroffen.',
-  displayLabel: 'Anzeige',
-  displayHint: 'web = nur Browser / desktop = nur Desktop / both = beides / none = nichts',
-  'display.web': 'Nur Browser',
-  'display.desktop': 'Nur Desktop',
-  'display.both': 'Beides',
-  'display.none': 'Nichts',
   cornerLabel: 'Position',
   'corner.top-left': 'Oben links',
   'corner.top-right': 'Oben rechts',
@@ -157,7 +150,7 @@ export const de: Record<Key, string> = {
     'Mehrere Monitore: Wenn an, bleibt das Pet auf dem Bildschirm, auf dem es sich gerade befindet – ein geworfenes Pet prallt nur innerhalb des Bildschirms ab, auf dem es losgelassen wurde (Bildschirmfugen wirken als Wände, es fliegt nicht zum Nachbarmonitor), und autonomes Umherlaufen bleibt auf dem aktuellen Bildschirm (ein Schritt über die Fuge wird einfach verworfen). Aus = Überqueren der Bildschirme wie gewohnt. Nur Desktop-Modus – das Browser-Overlay bleibt ohnehin im Viewport.',
   trayToggle: 'System-Tray',
   trayToggleHint:
-    'Zeigt im Desktop-Modus ein Tray-Symbol (Windows: Infobereich, macOS: Menüleiste). Es listet alle Pets der Konfiguration und schaltet die Anzeige um – auch für Pets, die gerade nicht auf dem Desktop sind und kein Fenster zum Rechtsklicken haben. Ohne Tray lässt sich ein Pet nur über den Browser (Einstellungsseite oder Rechtsklick auf das Web-Pet) zurück auf den Desktop holen. Windows blendet das Symbol ohnehin in die „ausgeblendeten Symbole" aus. Nur Desktop-Modus.',
+    'Zeigt im Desktop-Modus ein Tray-Symbol (Windows: Infobereich, macOS: Menüleiste). Das Menü bietet nur „Beenden“, damit der Desktop-Pet auch dann geschlossen werden kann, wenn kein Pet-Fenster zu sehen ist. Windows blendet das Symbol ohnehin in die „ausgeblendeten Symbole" aus. Nur Desktop-Modus.',
   voiceTitle: 'Sprachausgabe',
   voiceHint:
     'Vier Schalter und eine Stimme: Jede Art von Sprachausgabe hat ihren eigenen Schalter, keiner hängt von einem anderen ab. Standardmäßig alle aus; wird beim „Speichern" in die Benutzerkonfiguration geschrieben (kein sofortiges Schreiben).',

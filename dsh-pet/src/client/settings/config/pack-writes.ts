@@ -26,7 +26,6 @@ function fingerprint(pet: Pet): string {
     pet.whisperEnabled,
     pet.workStatusEnabled,
     pet.fixedEnabled,
-    pet.display,
     pet.position.corner,
     pet.position.marginX,
     pet.position.marginY,

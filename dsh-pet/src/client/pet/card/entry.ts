@@ -13,17 +13,14 @@ import {
   type EncodedImage,
 } from '../../../shared/chat/index.ts';
 import { captureDisplayFrame } from '../../../shared/chat/capture.ts';
-import { displayOfHotkey } from '../../../shared/display-hotkey.ts';
 import { SLEEP_HOTKEY_HINT, isSleepHotkey } from '../../../shared/sleep-hotkey.ts';
 import { TODO_HOTKEY_HINT, isTodoHotkey } from '../../../shared/todo/hotkey.ts';
-import type { PetDisplay } from '../../../shared/types.ts';
 import { bindOpenChat } from './open-chat.ts';
 import { registerPetChatHandle } from './registry.ts';
 import {
   buildMemeBranch,
   buildMenuTree,
   buildMoreBranch,
-  displayMenuBranch,
   memeThumbUrl,
   mountContextMenu,
   type MenuNode,
@@ -144,7 +141,6 @@ export function createCardEntry(rt: CardEntryRuntime) {
       chatRef.current = mountChatDialog({
         petId: cfgRef.current.id,
         baseUrl: ROUTE_PATH + '/chat',
-        surface: 'web',
         x: hitRect ? hitRect.right + 6 : window.innerWidth - 256,
         y: hitRect ? hitRect.top + 6 : 8,
         ...(seed.image ? { initialImage: seed.image } : {}),
@@ -242,11 +238,6 @@ export function createCardEntry(rt: CardEntryRuntime) {
       const asleep = live.current.flow?.sleeping() ?? false;
       runMenuAction(asleep ? { label: '起来', action: 'wake' } : { label: '睡觉', action: 'sleep' });
     };
-    // 数字键切显示位置：与右键「显示位置」子菜单同一条动作派发（写 display 配置，宿主重启生效）。
-    const switchDisplayRef = useRef<(display: PetDisplay) => void>(() => {});
-    switchDisplayRef.current = (display) => {
-      runMenuAction({ label: '显示位置', action: 'set-display', display });
-    };
     // 按住说话的按下/松开同样每次渲染都新建闭包；状态机只建一次，只能经 ref 取最新的那两个。
     const startChatHearRef = useRef<() => void>(startChatHear);
     startChatHearRef.current = startChatHear;
@@ -274,7 +265,7 @@ export function createCardEntry(rt: CardEntryRuntime) {
         }),
       [cfgRef],
     );
-    // 悬停键共用一次挂载：L 开对话、按住 M 说话、S 截图、Z 切换睡/醒、D 开关待办、1-4 切显示位置。
+    // 悬停键共用一次挂载：L 开对话、按住 M 说话、S 截图、Z 切换睡/醒、D 开关待办。
     // 全部只在鼠标停在这只宠物上时生效；按住说话另有一条——焦点在宠物自己的弹窗里也算，
     // 但在弹窗输入框里打字时不算（否则拼音里的 m 会被当成开录，见 createHearHold）。
     useEffect(() => {
@@ -301,12 +292,6 @@ export function createCardEntry(rt: CardEntryRuntime) {
           return;
         }
         if (!hoverRef.current) return;
-        const display = displayOfHotkey(e);
-        if (display !== undefined) {
-          e.preventDefault();
-          switchDisplayRef.current(display);
-          return;
-        }
         if (isCaptureHotkey(e)) {
           e.preventDefault();
           screenshotRef.current();
@@ -351,7 +336,7 @@ export function createCardEntry(rt: CardEntryRuntime) {
       const sleepItem: MenuNode = asleep
         ? { label: '起来', action: 'wake', hint: SLEEP_HOTKEY_HINT }
         : { label: '睡觉', action: 'sleep', hint: SLEEP_HOTKEY_HINT };
-      // 顺序与桌面端同一排法：余额 / 待办 / 碎碎念 / 对话 / 配图 / 睡觉 → 动作树 → 显示位置 / 回到初始位置。
+      // 顺序与桌面端同一排法：余额 / 待办 / 碎碎念 / 对话 / 配图 / 睡觉 → 动作树 → 回到初始位置。
       // 桌面专属的两项（打开软件、重载配置）在网页端没有对应动作，不出现。
       const tools: MenuNode[] = [
         { label: '查看余额', action: 'show-balance' },
@@ -362,11 +347,7 @@ export function createCardEntry(rt: CardEntryRuntime) {
         ...(memes ? [memes] : []),
         ...(canSleep ? [sleepItem] : []),
       ];
-      const tail: MenuNode[] = [
-        // 显示位置子菜单与桌面端同一份；改成不含 web 的值后本宠物会从页面消失。
-        displayMenuBranch(),
-        { label: '回到初始位置', action: 'home' },
-      ];
+      const tail: MenuNode[] = [{ label: '回到初始位置', action: 'home' }];
       const tree: MenuNode[] = [
         ...tools,
         ...buildMenuTree(cfgRef.current.animations),

@@ -27,7 +27,6 @@ export type ResultReason =
   | 'method-not-allowed'
   | 'no-sleep-animations'
   | 'payload-too-large'
-  | 'pet-not-displayed'
   | 'pet-required'
   | 'pose-unavailable'
   | 'provider-missing'

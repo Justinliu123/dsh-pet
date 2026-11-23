@@ -32,7 +32,6 @@ const pet = (id: string) => ({
   whisperEnabled: false,
   workStatusEnabled: false,
   fixedEnabled: false,
-  display: 'web',
   position: { corner: 'top-right', marginX: 10, marginY: 10 },
 });
 
@@ -40,7 +39,6 @@ interface Harness {
   readonly deps: PetRouteDeps;
   readonly userFile: string;
   readonly packFile: string;
-  readonly releases: string[];
   readonly restarts: number;
 }
 
@@ -52,7 +50,6 @@ function makeHarness(): Harness {
   const userFile = join(root, 'main-config.jsonc');
   const petDir = join(root, 'pet');
   const packFile = join(petDir, 'glm-config.json');
-  const releases: string[] = [];
   let restarts = 0;
   const deps = {
     configPaths: { defaultFile: DEFAULT_FILE, userFile, petDir },
@@ -60,11 +57,6 @@ function makeHarness(): Harness {
     userRoot: root,
     petConfigDir: petDir,
     state: { writeSection: () => {} },
-    lock: {
-      release: ({ petId }: { petId: string }) => {
-        releases.push(petId);
-      },
-    },
     requestRestart: async () => {
       restarts += 1;
     },
@@ -73,7 +65,6 @@ function makeHarness(): Harness {
     deps,
     userFile,
     packFile,
-    releases,
     get restarts() {
       return restarts;
     },
@@ -126,9 +117,7 @@ describe('savePetLayer —— 整条目写回', () => {
     const h = makeHarness();
     writeFileSync(h.userFile, JSON.stringify({ pets: [pet('main1')] }), 'utf8');
     writePack(h.packFile);
-    const res = jsonOf(
-      await savePetLayer(h.deps, input({ entry: 'glm', pets: [{ ...pet('glm1'), size: 360, display: 'both' }] })),
-    );
+    const res = jsonOf(await savePetLayer(h.deps, input({ entry: 'glm', pets: [{ ...pet('glm1'), size: 360 }] })));
     assert.equal(res.status, 200);
     const saved = JSON.parse(readFileSync(h.packFile, 'utf8')) as Record<string, unknown>;
     assert.equal((saved.pets as Array<{ size: number }>)[0].size, 360, '实例字段应写回');
@@ -189,13 +178,5 @@ describe('savePetLayer —— 整条目写回', () => {
     const badJson = jsonOf(await savePetLayer(h.deps, input('{')));
     assert.equal(badJson.status, 400);
     assert.equal(badJson.obj.reason, 'invalid-json');
-  });
-
-  test('改成 none 的实例会撤销占用锁（与 /pet-display 同口径）', async () => {
-    const h = makeHarness();
-    writeFileSync(h.userFile, JSON.stringify({ pets: [pet('main1')] }), 'utf8');
-    writePack(h.packFile);
-    await savePetLayer(h.deps, input({ entry: 'glm', pets: [{ ...pet('glm1'), display: 'none' }] }));
-    assert.deepEqual(h.releases, ['glm1']);
   });
 });

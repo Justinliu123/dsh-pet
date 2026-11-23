@@ -16,7 +16,7 @@ export const en: Record<Key, string> = {
   avatarUploading: 'Uploading…',
   avatarUploaded: 'Avatar updated',
   petCardHint:
-    'Per-pet settings: name / size / display / corner / offsets / the four feature switches. Click "Save" at the bottom to apply instantly.',
+    'Per-pet settings: name / size / corner / offsets / the four feature switches. Click "Save" at the bottom to apply instantly.',
   globalTitle: 'Global switches',
   globalHint:
     'Shared by every pet (a pet pack may override them in its own kind file). These switches only change local state and are written to the user config on "Save" (never written immediately); system notifications re-read right after saving, no page refresh needed.',
@@ -40,7 +40,6 @@ export const en: Record<Key, string> = {
   shortcutRowPaste: 'Paste image',
   shortcutRowTodo: 'Todo list',
   shortcutRowSleep: 'Sleep / wake',
-  shortcutRowDisplay: 'Display position',
   shortcutRowSidebar: 'Open sidebar chat',
   shortcutGroupPet: 'Pet shortcuts',
   shortcutGroupPetHint:
@@ -80,12 +79,6 @@ export const en: Record<Key, string> = {
   fixedEnabled: 'Pin in place',
   fixedEnabledHint:
     'When enabled, the random chain no longer turns this pet or walks it away — only idle and in-place actions play. Right-click picks, API triggers and balance / whisper / work-status animations are unaffected.',
-  displayLabel: 'Display',
-  displayHint: 'web = browser only / desktop = desktop only / both = both / none = neither',
-  'display.web': 'Browser only',
-  'display.desktop': 'Desktop only',
-  'display.both': 'Both',
-  'display.none': 'Neither',
   cornerLabel: 'Position',
   'corner.top-left': 'Top-left',
   'corner.top-right': 'Top-right',
@@ -156,7 +149,7 @@ export const en: Record<Key, string> = {
     'Multi-monitor: when on, the pet stays inside the screen it is currently on — a thrown pet bounces only inside the screen it was released on (screen seams act as walls, so it never flies to the neighbouring monitor), and autonomous wandering only walks within the screen it is currently on (a step that would cross the seam is simply cancelled). Turn this off to let it cross screens as usual. Desktop only — the browser overlay always stays inside the viewport anyway.',
   trayToggle: 'System tray',
   trayToggleHint:
-    'Shows a tray icon (notification area on Windows, menu bar on macOS) once desktop mode is running. It lists every pet in the config and toggles each one between desktop and web/none — including pets that are currently off the desktop and therefore have no window to right-click. With it off, bringing a pet back to the desktop requires opening the browser (the settings page, or right-clicking a web pet there). Windows already folds third-party icons into the "hidden icons" overflow. Desktop mode only.',
+    'Shows a tray icon (notification area on Windows, menu bar on macOS) once desktop mode is running. The menu only offers "Quit", so the desktop pet can be closed even when no pet window is around. Windows already folds third-party icons into the "hidden icons" overflow. Desktop mode only.',
   voiceTitle: 'Voice',
   voiceHint:
     'Four switches plus a voice: each kind of speech has its own switch and none of them depends on another. All off by default; written to the user config on "Save" (never written immediately).',

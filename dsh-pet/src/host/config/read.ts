@@ -53,7 +53,7 @@ function scanPetFiles(petDir: string): PetFileEntry[] {
 
 /**
  * 按条目 key（= 文件名前缀 = 素材根）定位文件宠物的实际文件与磁盘原对象。
- * 写路径（POST /pet-display）改文件宠物的 display 时，既要写回它自己的配置文件，也要拿该文件的
+ * 写路径（POST /pet-config）改文件宠物的配置时，既要写回它自己的配置文件，也要拿该文件的
  * existing 做透传保留，否则手改的 whisperPrompt / animations / memes 会被白名单重建抹掉。
  * 扩展名不写死（.json 或 .jsonc），写错就会新建一个空配置；前缀不存在 → undefined。
  */

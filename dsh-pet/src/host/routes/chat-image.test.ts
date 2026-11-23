@@ -63,10 +63,10 @@ function makeSink(overrides: Partial<PetImageSink> = {}): {
   return { sink, saved };
 }
 
-/** 一次 POST /chat 调用；URL 只是占位，pet 与 surface 由 requirePet 桩决定。 */
+/** 一次 POST /chat 调用；URL 只是占位，pet 由 requirePet 桩决定。 */
 function postChat(body: unknown): RouteInput {
   return {
-    url: new URL('http://127.0.0.1/dsh-pet-7340/chat?pet=main&surface=web'),
+    url: new URL('http://127.0.0.1/dsh-pet-7340/chat?pet=main'),
     rest: 'chat',
     method: 'POST',
     body: JSON.stringify(body),

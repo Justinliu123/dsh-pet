@@ -19,7 +19,7 @@ import { generateWhisper } from '../whisper.ts';
 import { createMemoryOrphans } from './memory-orphans.ts';
 import { configuredModel } from '../model-selection.ts';
 import { SLEEP_TALK_INSTRUCTION } from '../whisper.ts';
-import { pickVoiceSurface, type VoiceTarget } from '../surface.ts';
+import { VOICE_TARGET } from '../voice-target.ts';
 import type { HostSetup } from './setup.ts';
 import type { HostContext } from './context.ts';
 import {
@@ -69,11 +69,6 @@ interface ChatContext {
   readonly actions: string[];
   readonly list: ChatMemoryMessage[];
   readonly system: string;
-}
-
-/** 这一句该由哪一端念：取宠物实例的 display 推导（桌面优先）；两端都不显示时为 `undefined`。 */
-function voiceTargetFor(pet: Record<string, unknown>): VoiceTarget | undefined {
-  return pickVoiceSurface(String(pet.display ?? '')) ?? undefined;
 }
 
 /** 对话与记忆的输入：装配期对象与更早的工厂。 */
@@ -229,15 +224,12 @@ export function createChatMemory(deps: ChatMemoryInput) {
    *  @param petId - 目标宠物实例 id。
    *  @param image - 指定配图的名称：给了就只用这张（不受 whisperImageEnabled 门控，手动点图是显式意图），
    *  不在池内返回 unknown-image；缺省 = 按开关随机抽或纯文本。
-   *  @param voiceTo - 这一句该由哪一端念；缺省按它自己的 display 推导（桌面优先，见 {@link pickVoiceSurface}）。
-   *  路由层带 `?surface=` 的会显式传请求面，其余调用点留空即可。
    *  @param kind - 这次生成的来源：`whisper` = 周期调度，受 `voiceWhisperEnabled` 管；`manual` = 菜单、
    *  斜杠命令、路由主动触发，不看那个开关（用户主动点的就是这一句）。缺省 `manual`。
    */
   const publishWhisper = async (
     petId: string,
     image?: string,
-    voiceTo?: VoiceTarget,
     kind: 'whisper' | 'manual' = 'manual',
   ): Promise<
     | { ok: true; text: string; image?: string }
@@ -253,7 +245,7 @@ export function createChatMemory(deps: ChatMemoryInput) {
     const whisperVoiceOn = cfg.main?.voiceWhisperEnabled === true;
     const manualVoiceOn = cfg.main?.voiceEnabled === true;
     const voiceOff = kind === 'whisper' ? !whisperVoiceOn : !manualVoiceOn;
-    const target = voiceOff ? undefined : (voiceTo ?? voiceTargetFor(found.pet));
+    const target = voiceOff ? undefined : VOICE_TARGET;
     const system = petSystemPrompt(found, { env: await currentEnvironment() });
     // 池只算一次：点名的图与随机抽图共用同一份（含文件存在性判定）。
     const pool = readMemePool(found.conf.memes, memeDirsFor(found.entry));
@@ -459,7 +451,6 @@ export function createChatMemory(deps: ChatMemoryInput) {
             id: String(found.pet.id ?? petId),
             name: String(found.pet.name ?? ''),
             entry: found.entry,
-            display: String(found.pet.display ?? ''),
           },
         },
       })) ?? prepared;
@@ -510,9 +501,9 @@ export function createChatMemory(deps: ChatMemoryInput) {
       state.writePet(petId, 'anim', { name: generated.action, playbackId: record.playbackId });
     }
     // 回复写进 S（与碎碎念同一个叶子：前端本来就是同一条展示链路）。
-    // 该由哪一端念按这只宠物的 display 推：对话请求带的是 surface=any，本来就没有具体的一端可用。
+    // 该由哪一端念：桌宠只显示在桌面端，这一句就由桌面端念。
     // 对话回复归「手动播报」：用户发了消息才有的这一句，由 voiceEnabled 决定念不念。
-    const replyVoiceTo = cfg.main?.voiceEnabled === true ? voiceTargetFor(found.pet) : undefined;
+    const replyVoiceTo = cfg.main?.voiceEnabled === true ? VOICE_TARGET : undefined;
     // 只有动作没有正文（模型只写了标记）→ 不写 say，避免弹一个空气泡。
     if (generated.text !== '') {
       state.writePet(petId, 'say', {

@@ -164,9 +164,7 @@ export function createDesktopSpawn(deps: DesktopSpawnInput) {
       // 托盘关掉后这里也会命中：没人需要那个图标，空常驻没有意义。
       if (!noDesktopSkipped) {
         noDesktopSkipped = true;
-        log.info(
-          `[dsh-pet] 无桌面宠物（display 均为 web/none）且无需保留托盘（tray=${getTrayOn()}），已跳过桌面 Helper 启动`,
-        );
+        log.info(`[dsh-pet] 配置里没有宠物，且无需保留托盘（tray=${getTrayOn()}），已跳过桌面 Helper 启动`);
       }
       return;
     }

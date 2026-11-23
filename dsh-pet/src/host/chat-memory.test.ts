@@ -219,15 +219,15 @@ describe('createChatMemory —— 指定配图的碎碎念', () => {
     }
   });
 
-  test('voiceTo：传了就用传的，没传按 display 推导（默认宠物 display=both → desktop）', async () => {
-    const ws = poolWorkspace({ voiceEnabled: true });
+  test('voiceTo：恒为 desktop（桌宠只显示在桌面端，这一句也只由桌面端念）', async () => {
+    const ws = poolWorkspace({ voiceEnabled: true, voiceWhisperEnabled: true });
     const records: Array<{ petId: string; leaf: string; data: Record<string, unknown> }> = [];
     try {
-      await createMemory('随便一句', ws, ws.memeDir, { records }).publishWhisper('main', undefined, 'web');
-      assert.equal(records[0]?.data.voiceTo, 'web', '显式传入优先于 display');
+      await createMemory('随便一句', ws, ws.memeDir, { records }).publishWhisper('main');
+      assert.equal(records[0]?.data.voiceTo, 'desktop', '手动触发的碎碎念恒由桌面端念');
 
-      await createMemory('纯文本一句', ws, ws.memeDir, { records }).publishWhisper('main');
-      assert.equal(records[1]?.data.voiceTo, 'desktop', '没传时按 display 推导：桌面优先');
+      await createMemory('纯文本一句', ws, ws.memeDir, { records }).publishWhisper('main', undefined, 'whisper');
+      assert.equal(records[1]?.data.voiceTo, 'desktop', '周期碎碎念同样恒由桌面端念');
     } finally {
       rmSync(ws.dir, { recursive: true, force: true });
     }
@@ -238,7 +238,6 @@ describe('createChatMemory —— 指定配图的碎碎念', () => {
     try {
       await createMemory('一句', off, off.memeDir, { records: offRecords }).publishWhisper(
         'main',
-        undefined,
         undefined,
         'whisper',
       );
@@ -253,12 +252,7 @@ describe('createChatMemory —— 指定配图的碎碎念', () => {
     const on = tempWorkspace({ voiceWhisperEnabled: true, voiceEnabled: true });
     const onRecords: Array<{ petId: string; leaf: string; data: Record<string, unknown> }> = [];
     try {
-      await createMemory('一句', on, undefined, { records: onRecords }).publishWhisper(
-        'main',
-        undefined,
-        undefined,
-        'whisper',
-      );
+      await createMemory('一句', on, undefined, { records: onRecords }).publishWhisper('main', undefined, 'whisper');
       assert.equal(onRecords[0]?.data.voiceTo, 'desktop', '开关打开后周期碎碎念照常带 voiceTo');
 
       await createMemory('一句', on, undefined, { records: onRecords }).publishWhisper('main');
@@ -270,13 +264,13 @@ describe('createChatMemory —— 指定配图的碎碎念', () => {
 });
 
 describe('createChatMemory —— 对话回复的 voiceTo', () => {
-  test('回复写叶子时带上该由哪一端念（对话请求没有具体端，按 display 推导）', async () => {
+  test('回复写叶子时带上该由哪一端念（恒为 desktop）', async () => {
     const ws = tempWorkspace({ voiceEnabled: true });
     const records: Array<{ petId: string; leaf: string; data: Record<string, unknown> }> = [];
     try {
       const r = await createMemory('在的', ws, undefined, { records }).chatWithPet('main', '在吗');
       assert.equal(r.ok, true);
-      assert.equal(records[0]?.data.voiceTo, 'desktop', '默认宠物 display=both，桌面优先');
+      assert.equal(records[0]?.data.voiceTo, 'desktop', '桌宠只在桌面端，回复恒由桌面端念');
     } finally {
       rmSync(ws.dir, { recursive: true, force: true });
     }

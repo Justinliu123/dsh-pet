@@ -16,7 +16,6 @@ const pet = (id: string) => ({
   id,
   name: id,
   size: 240,
-  display: 'web',
   balanceEnabled: false,
   whisperEnabled: false,
   workStatusEnabled: false,
@@ -25,6 +24,7 @@ const pet = (id: string) => ({
 let dir = '';
 let file = '';
 let packFile = '';
+let pigFile = '';
 let base = '';
 let token = '';
 let context: ReturnType<typeof createStandaloneContext>;
@@ -61,6 +61,7 @@ before(async () => {
   mkdirSync(join(home, 'dsh-pet/pet'), { recursive: true });
   file = join(home, 'dsh-pet/main-config.jsonc');
   packFile = join(home, 'dsh-pet/pet/pack-config.jsonc');
+  pigFile = join(home, 'dsh-pet/pet/pig-config.jsonc');
   writeFileSync(file, JSON.stringify({ trayEnabled: false, pets: [pet('alpha'), pet('beta')] }));
   const logger = { info() {}, warn() {}, error() {}, debug() {} };
   context = createStandaloneContext({ port: 0, logger });
@@ -79,6 +80,7 @@ beforeEach(() => {
     JSON.stringify({ trayEnabled: false, notificationsEnabled: true, pets: [pet('alpha'), pet('beta')] }),
   );
   rmSync(packFile, { force: true });
+  rmSync(pigFile, { force: true });
 });
 
 after(async () => {
@@ -99,7 +101,11 @@ async function request(path: string, method = 'GET', body?: unknown) {
   });
   return {
     status: response.status,
-    body: (await response.json()) as { main?: { pets: Array<{ id: string }> }; pack?: unknown },
+    body: (await response.json()) as {
+      main?: { pets: Array<{ id: string }> };
+      pack?: unknown;
+      reason?: string;
+    },
   };
 }
 
@@ -108,28 +114,31 @@ const read = (path = file) => {
   assert.ok(value, 'the saved config must remain readable');
   return value as { pets: ReturnType<typeof pet>[]; [key: string]: unknown };
 };
-const displays = (value: { pets: Array<{ id: string; display: string }> }) =>
-  Object.fromEntries(value.pets.map((p) => [p.id, p.display]));
+/** 取某一层落盘的宠物 id 列表（按顺序）：并发写之后两只都得还在。 */
+const ids = (value: { pets: Array<{ id: string }> }) => value.pets.map((p) => p.id);
 
-test('concurrent display changes preserve both main pets', async () => {
+test('concurrent write-backs keep both kinds of pets', async () => {
+  writeFileSync(packFile, JSON.stringify({ pets: [pet('pack-a'), pet('pack-b')] }));
+  writeFileSync(pigFile, JSON.stringify({ pets: [pet('pig-a')] }));
   const results = await Promise.all([
-    request('pet-display', 'POST', { id: 'alpha', display: 'none' }),
-    request('pet-display', 'POST', { id: 'beta', display: 'both' }),
+    request('pet-config', 'POST', { entry: 'pack', pets: [pet('pack-a'), pet('pack-b')] }),
+    request('pet-config', 'POST', { entry: 'pig', pets: [pet('pig-a'), pet('pig-b')] }),
   ]);
   assert.ok(results.every((r) => r.status === 200 && r.body.main));
-  assert.deepEqual(displays(read()), { alpha: 'none', beta: 'both' });
+  assert.deepEqual(ids(read(packFile)), ['pack-a', 'pack-b'], 'pack 那份写回不得丢');
+  assert.deepEqual(ids(read(pigFile)), ['pig-a', 'pig-b'], 'pig 那份写回不得丢');
 });
 
-test('concurrent display changes preserve both pack pets and custom fields', async () => {
+test('concurrent pack write-back preserves pack pets and custom fields', async () => {
   writeFileSync(packFile, JSON.stringify({ pets: [pet('pack-a'), pet('pack-b')], whisperPrompt: 'keep this persona' }));
   const results = await Promise.all([
-    request('pet-display', 'POST', { id: 'pack-a', display: 'none' }),
-    request('pet-display', 'POST', { id: 'pack-b', display: 'both' }),
+    request('pet-config', 'POST', { entry: 'pack', pets: [pet('pack-a'), pet('pack-b')] }),
+    request('config', 'PUT', { pets: [pet('alpha'), pet('beta')] }),
   ]);
-  assert.ok(results.every((r) => r.status === 200 && r.body.pack));
-  assert.deepEqual(displays(read(packFile)), { 'pack-a': 'none', 'pack-b': 'both' });
-  assert.equal(read(packFile).whisperPrompt, 'keep this persona');
-  assert.deepEqual(displays(read()), { alpha: 'web', beta: 'web' });
+  assert.ok(results.every((r) => r.status === 200 && r.body.main));
+  assert.deepEqual(ids(read(packFile)), ['pack-a', 'pack-b'], 'pack 两只都得在');
+  assert.equal(read(packFile).whisperPrompt, 'keep this persona', '条目人设要保留');
+  assert.deepEqual(ids(read()), ['alpha', 'beta'], 'main 层不受 pack 写回影响');
 });
 
 test('concurrent pack write and settings save do not overwrite each other', async () => {
@@ -156,30 +165,31 @@ test('concurrent pack write and settings save do not overwrite each other', asyn
   assert.equal(read(packFile).whisperPrompt, 'keep this persona', '条目人设要保留');
 });
 
-test('display changes cannot undo a concurrent settings save', async () => {
+test('a write-back cannot undo a concurrent settings save', async () => {
+  writeFileSync(packFile, JSON.stringify({ pets: [pet('pack-a')] }));
   const results = await Promise.all([
     request('config', 'PUT', { pets: [pet('alpha'), pet('beta')], notificationsEnabled: false }),
-    request('pet-display', 'POST', { id: 'alpha', display: 'none' }),
+    request('pet-config', 'POST', { entry: 'pack', pets: [pet('pack-a'), pet('pack-b')] }),
   ]);
   assert.ok(results.every((r) => r.status === 200 && r.body.main));
-  assert.equal(read().notificationsEnabled, false);
+  assert.equal(read().notificationsEnabled, false, '设置保存的结果不得被并发写回撤销');
+  assert.deepEqual(ids(read()), ['alpha', 'beta'], 'main 的实例列表不得被并发写回撤销');
 });
 
-test('restoring defaults cannot be undone by a concurrent display change', async () => {
+test('restoring defaults cannot be undone by a concurrent write-back', async () => {
   writeFileSync(
     file,
     JSON.stringify({ trayEnabled: false, pets: [pet('main'), pet('extra')], note: 'remove on reset' }),
   );
+  writeFileSync(packFile, JSON.stringify({ pets: [pet('pack-a')] }));
   const results = await Promise.all([
-    request('pet-display', 'POST', { id: 'main', display: 'none' }),
+    request('pet-config', 'POST', { entry: 'pack', pets: [pet('pack-a'), pet('pack-b')] }),
     request('config', 'POST'),
   ]);
   assert.ok(results.every((r) => r.status === 200 && r.body.main));
-  assert.equal(read().note, undefined);
-  assert.deepEqual(
-    read().pets.map((p: { id: string }) => p.id),
-    ['main'],
-  );
+  assert.equal(read().note, undefined, '恢复默认的结果不得被并发写回撤销');
+  assert.deepEqual(ids(read()), ['main'], '恢复默认后 main 只剩内置那一只');
+  assert.deepEqual(ids(read(packFile)), ['pack-a', 'pack-b'], '并发写回自己也不该丢');
 });
 
 test('config reads do not observe an incomplete concurrent save', async () => {
@@ -198,9 +208,12 @@ test('config reads do not observe an incomplete concurrent save', async () => {
 });
 
 test('a rejected config operation does not prevent later updates', async () => {
-  const invalid = await request('pet-display', 'POST', null);
-  assert.equal(invalid.status, 500);
-  const valid = await request('pet-display', 'POST', { id: 'alpha', display: 'none' });
+  writeFileSync(packFile, JSON.stringify({ pets: [pet('pack-a')] }));
+  const invalid = await request('pet-config', 'POST', { entry: 'pack' });
+  assert.equal(invalid.status, 200);
+  assert.equal(invalid.body.reason, 'bad-request', '缺 pets 的请求体必须被拒');
+  assert.deepEqual(ids(read(packFile)), ['pack-a'], '被拒的请求不得写盘');
+  const valid = await request('pet-config', 'POST', { entry: 'pack', pets: [pet('pack-a'), pet('pack-b')] });
   assert.equal(valid.status, 200);
-  assert.equal(read().pets[0].display, 'none');
+  assert.deepEqual(ids(read(packFile)), ['pack-a', 'pack-b']);
 });

@@ -5,7 +5,6 @@
  * @module dsh-pet/src/host/plugin/loops
  */
 import { findPetInstance, flattenPetList, readAllConfig } from '../config.ts';
-import { isDisplayed } from '../surface.ts';
 import { automaticWhisperSchedule } from '../whisper-policy.ts';
 import { clampPeriodSec } from './period.ts';
 import type { BalancePoll } from './balance-poll.ts';
@@ -107,141 +106,136 @@ export function registerLoops(deps: LoopsInput): void {
   // 用固定拍 + 逐宠物比对 lastWhisperAt，而不是每宠一个定时器：宠物随配置增删、周期随条目改，
   // 固定拍天然跟上，不用维护一堆定时器的生命周期。
   // 数据通道模式（插件在 DSH 里跑）不装这套调度：文案与语音归独立版，否则两边各生成一份。
-  if (whisperDisabled !== true) ctx.effect(() => {
-    let disposed = false;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-    /** 待发布的宠物（FIFO）；一次只发一只，两只之间隔 {@link WHISPER_STAGGER_MS}。 */
-    const pending: string[] = [];
-    /** 队列内相邻两只之间的等待句柄；与拍定时器分开计，两者都要在卸载时清掉。 */
-    let drainTimer: ReturnType<typeof setTimeout> | null = null;
+  if (whisperDisabled !== true)
+    ctx.effect(() => {
+      let disposed = false;
+      let timer: ReturnType<typeof setTimeout> | null = null;
+      /** 待发布的宠物（FIFO）；一次只发一只，两只之间隔 {@link WHISPER_STAGGER_MS}。 */
+      const pending: string[] = [];
+      /** 队列内相邻两只之间的等待句柄；与拍定时器分开计，两者都要在卸载时清掉。 */
+      let drainTimer: ReturnType<typeof setTimeout> | null = null;
 
-    /** 是否已经有一只正在生成；同一时刻只允许一只，否则两只仍会同时写出气泡。 */
-    let pumping = false;
+      /** 是否已经有一只正在生成；同一时刻只允许一只，否则两只仍会同时写出气泡。 */
+      let pumping = false;
 
-    /**
-     * 从队列取下一只发布，等它写完再隔一个间隔发下一只。
-     *
-     * 间隔从「文字真的写进状态」算起，而不是从发起点算：单次生成耗时在 3–15 秒之间波动，
-     * 从发起点算的固定间隔会被慢的那只吃掉，两只又撞到一起。
-     */
-    async function pump(): Promise<void> {
-      if (disposed || pumping || drainTimer !== null) return;
-      const petId = pending.shift();
-      if (petId === undefined) return;
-      pumping = true;
-      try {
-        // kind=whisper 让生成侧按 voiceWhisperEnabled 决定要不要带 voiceTo。
-        await publishWhisper(petId, undefined, undefined, 'whisper');
-      } catch {
-        // 单只失败不挡住后面的宠物：原因已经由 publishWhisper 记过日志。
-      } finally {
-        pumping = false;
-      }
-      if (disposed || pending.length === 0) return;
-      drainTimer = setTimeout(() => {
-        drainTimer = null;
-        void pump();
-      }, WHISPER_STAGGER_MS);
-    }
-
-    function arm(sec: number): void {
-      if (disposed) return;
-      timer = setTimeout(() => void tick(), Math.max(1000, sec * 1000));
-    }
-    function tick(): void {
-      let next = 300;
-      try {
-        const cfg = readAllConfig(configPaths);
-        const now = Date.now();
-        let min = Infinity;
-        // 每一拍的账：检查几只、到点几只、没到点几只、跳过几只（带原因）。只用于日志，调度行为不变。
-        let checked = 0;
-        let due = 0;
-        let notDue = 0;
-        const skipped: string[] = [];
-        for (const pet of flattenPetList(cfg)) {
-          const petId = String(pet.id ?? '');
-          if (!petId) continue;
-          // petId 就是从同一份 cfg 拍平出来的，所以必然命中（findPetInstance 与 flattenPetList
-          // 搜索同一集合）；查不到只可能是两者口径漂移——跳过这一拍，不猜也不兜底 main。
-          const found = findPetInstance(cfg, petId);
-          if (!found) continue;
-          checked += 1;
-          const schedule = automaticWhisperSchedule(
-            standaloneAiPolicy(),
-            pet.whisperEnabled === true,
-            whisperPeriodSec(found.conf),
-          );
-          if (!schedule.enabled) {
-            // 两种「没启用」分开记：宠物自己关掉，与独立模式 AI 未就绪，处理方式完全不同
-            skipped.push(petId + ': ' + (pet.whisperEnabled === true ? '独立模式 AI 未就绪' : 'whisperEnabled=false'));
-            continue;
-          }
-          // 配置上不显示的宠物不生成：用户选「都不显示」就是不用了，后台继续调模型纯属白烧额度（#237）。
-          // 放在 min 之前：不可见的宠物也不该把整拍的周期拖住。不推进 lastWhisperAt——
-          // 与占用锁同一口径，重新可见后下一拍立刻补一句。
-          const display = String(pet.display ?? '');
-          if (!isDisplayed(display)) {
-            skipped.push(petId + ': display=none');
-            continue;
-          }
-          const sec = schedule.periodSec;
-          min = Math.min(min, sec);
-          if (now - (lastWhisperAt.get(petId) ?? 0) < sec * 1000) {
-            notDue += 1;
-            continue;
-          }
-          // 占用锁：这只宠物被占用时跳过这一拍——不生成也不补（碎碎念是瞬时事件，过期即弃），
-          // 且不推进 lastWhisperAt：锁一放开，下一拍就该照常说。
-          // 只挡这一处 per-pet 来源；全局段（balance / workStatus）由渲染端按宠物忽略——
-          // 宿主跳过写入会连带静音别的宠物。
-          if (lock.locked(petId)) {
-            skipped.push(petId + ': 占用锁跳过');
-            continue;
-          }
-          // 睡觉：不生成、也不推进 lastWhisperAt——醒来的下一拍立刻补一句，与占用锁同一口径。
-          if (sleep.sleeping(petId)) {
-            skipped.push(petId + ': 睡觉中');
-            continue;
-          }
-          // 队列有上限：宠物多、周期短时宁可这一拍少说几句，也不让错峰追着下一拍跑。
-          if (pending.length >= WHISPER_QUEUE_MAX) {
-            skipped.push(petId + ': 错峰队列已满');
-            continue;
-          }
-          due += 1;
-          // 在调度时记：排队不改变周期语义，单只仍然每 sec 秒一句。
-          lastWhisperAt.set(petId, now);
-          log.info(`[dsh-pet] 碎碎念到点 pet=${petId}（周期 ${sec}s），入队待发`);
-          pending.push(petId);
+      /**
+       * 从队列取下一只发布，等它写完再隔一个间隔发下一只。
+       *
+       * 间隔从「文字真的写进状态」算起，而不是从发起点算：单次生成耗时在 3–15 秒之间波动，
+       * 从发起点算的固定间隔会被慢的那只吃掉，两只又撞到一起。
+       */
+      async function pump(): Promise<void> {
+        if (disposed || pumping || drainTimer !== null) return;
+        const petId = pending.shift();
+        if (petId === undefined) return;
+        pumping = true;
+        try {
+          // kind=whisper 让生成侧按 voiceWhisperEnabled 决定要不要带 voiceTo。
+          await publishWhisper(petId, undefined, 'whisper');
+        } catch {
+          // 单只失败不挡住后面的宠物：原因已经由 publishWhisper 记过日志。
+        } finally {
+          pumping = false;
         }
-        void pump(); // 本拍到点的宠物开始逐只发布
-        if (Number.isFinite(min)) next = min;
-        // 每拍一行汇总：调度是否还在跑、下一拍多久、为什么跳过，全在这一行里（300s 一条，量可忽略）
-        log.info(
-          `[dsh-pet] 碎碎念调度：检查 ${checked} 只 → 到点 ${due}、未到点 ${notDue}、跳过 ${skipped.length}` +
-            (due > 1 ? `；${due} 只按 ${WHISPER_STAGGER_MS / 1000}s 间隔依次说` : '') +
-            (skipped.length > 0 ? `（${skipped.join('；')}）` : '') +
-            `；下一拍 ${next}s`,
-        );
-      } catch (e) {
-        // 读配置抛错 = 安装损坏（同余额定时器）：不再重排，别白占常驻句柄。
-        // 但必须留一行 warn：这条路径会让自动碎碎念永久停摆。
-        log.warn(
-          '[dsh-pet] 碎碎念调度读配置失败，自动碎碎念已停止（重启 DSH 后恢复）：' +
-            (e instanceof Error ? e.message : String(e)),
-        );
-        return;
+        if (disposed || pending.length === 0) return;
+        drainTimer = setTimeout(() => {
+          drainTimer = null;
+          void pump();
+        }, WHISPER_STAGGER_MS);
       }
-      arm(next);
-    }
-    void tick(); // 启动即生成一次，不等第一个周期
-    return () => {
-      disposed = true;
-      if (timer !== null) clearTimeout(timer);
-      if (drainTimer !== null) clearTimeout(drainTimer);
-    };
-  }, 'dsh-pet: whisper poll');
+
+      function arm(sec: number): void {
+        if (disposed) return;
+        timer = setTimeout(() => void tick(), Math.max(1000, sec * 1000));
+      }
+      function tick(): void {
+        let next = 300;
+        try {
+          const cfg = readAllConfig(configPaths);
+          const now = Date.now();
+          let min = Infinity;
+          // 每一拍的账：检查几只、到点几只、没到点几只、跳过几只（带原因）。只用于日志，调度行为不变。
+          let checked = 0;
+          let due = 0;
+          let notDue = 0;
+          const skipped: string[] = [];
+          for (const pet of flattenPetList(cfg)) {
+            const petId = String(pet.id ?? '');
+            if (!petId) continue;
+            // petId 就是从同一份 cfg 拍平出来的，所以必然命中（findPetInstance 与 flattenPetList
+            // 搜索同一集合）；查不到只可能是两者口径漂移——跳过这一拍，不猜也不兜底 main。
+            const found = findPetInstance(cfg, petId);
+            if (!found) continue;
+            checked += 1;
+            const schedule = automaticWhisperSchedule(
+              standaloneAiPolicy(),
+              pet.whisperEnabled === true,
+              whisperPeriodSec(found.conf),
+            );
+            if (!schedule.enabled) {
+              // 两种「没启用」分开记：宠物自己关掉，与独立模式 AI 未就绪，处理方式完全不同
+              skipped.push(
+                petId + ': ' + (pet.whisperEnabled === true ? '独立模式 AI 未就绪' : 'whisperEnabled=false'),
+              );
+              continue;
+            }
+            const sec = schedule.periodSec;
+            min = Math.min(min, sec);
+            if (now - (lastWhisperAt.get(petId) ?? 0) < sec * 1000) {
+              notDue += 1;
+              continue;
+            }
+            // 占用锁：这只宠物被占用时跳过这一拍——不生成也不补（碎碎念是瞬时事件，过期即弃），
+            // 且不推进 lastWhisperAt：锁一放开，下一拍就该照常说。
+            // 只挡这一处 per-pet 来源；全局段（balance / workStatus）由渲染端按宠物忽略——
+            // 宿主跳过写入会连带静音别的宠物。
+            if (lock.locked(petId)) {
+              skipped.push(petId + ': 占用锁跳过');
+              continue;
+            }
+            // 睡觉：不生成、也不推进 lastWhisperAt——醒来的下一拍立刻补一句，与占用锁同一口径。
+            if (sleep.sleeping(petId)) {
+              skipped.push(petId + ': 睡觉中');
+              continue;
+            }
+            // 队列有上限：宠物多、周期短时宁可这一拍少说几句，也不让错峰追着下一拍跑。
+            if (pending.length >= WHISPER_QUEUE_MAX) {
+              skipped.push(petId + ': 错峰队列已满');
+              continue;
+            }
+            due += 1;
+            // 在调度时记：排队不改变周期语义，单只仍然每 sec 秒一句。
+            lastWhisperAt.set(petId, now);
+            log.info(`[dsh-pet] 碎碎念到点 pet=${petId}（周期 ${sec}s），入队待发`);
+            pending.push(petId);
+          }
+          void pump(); // 本拍到点的宠物开始逐只发布
+          if (Number.isFinite(min)) next = min;
+          // 每拍一行汇总：调度是否还在跑、下一拍多久、为什么跳过，全在这一行里（300s 一条，量可忽略）
+          log.info(
+            `[dsh-pet] 碎碎念调度：检查 ${checked} 只 → 到点 ${due}、未到点 ${notDue}、跳过 ${skipped.length}` +
+              (due > 1 ? `；${due} 只按 ${WHISPER_STAGGER_MS / 1000}s 间隔依次说` : '') +
+              (skipped.length > 0 ? `（${skipped.join('；')}）` : '') +
+              `；下一拍 ${next}s`,
+          );
+        } catch (e) {
+          // 读配置抛错 = 安装损坏（同余额定时器）：不再重排，别白占常驻句柄。
+          // 但必须留一行 warn：这条路径会让自动碎碎念永久停摆。
+          log.warn(
+            '[dsh-pet] 碎碎念调度读配置失败，自动碎碎念已停止（重启 DSH 后恢复）：' +
+              (e instanceof Error ? e.message : String(e)),
+          );
+          return;
+        }
+        arm(next);
+      }
+      void tick(); // 启动即生成一次，不等第一个周期
+      return () => {
+        disposed = true;
+        if (timer !== null) clearTimeout(timer);
+        if (drainTimer !== null) clearTimeout(drainTimer);
+      };
+    }, 'dsh-pet: whisper poll');
 
   // 梦话周期：只对正在睡的宠物，按各自条目的 eventsRefreshSec.sleepTalk 排。
   // 与碎碎念同一个形态（固定拍 + 逐宠物比对 lastAt），宠物增删与周期改动天然跟上。
@@ -295,16 +289,14 @@ export function registerLoops(deps: LoopsInput): void {
 /**
  * 这只宠物这一刻该不该说梦话。
  *
- * 两道判定与碎碎念同口径：宠物自己关掉碎碎念就不再有任何后台生成；配置上不显示的
- * 宠物也不生成——用户选「都不显示」就是不用了，后台继续调模型纯属白烧额度（#237）。
+ * 两道判定与碎碎念同口径：宠物自己关掉碎碎念就不再有任何后台生成。
  *
  * @param pet - 成品配置拍平后的宠物条目。
- * @returns 两道判定都通过时为 true。
+ * @returns 判定通过时为 true。
  * @internal
  */
 export function shouldSleepTalk(pet: Record<string, unknown>): boolean {
-  if (pet.whisperEnabled !== true) return false;
-  return isDisplayed(String(pet.display ?? ''));
+  return pet.whisperEnabled === true;
 }
 
 /** 梦话周期（秒）：条目级 eventsRefreshSec.sleepTalk，读不到按 60 兜底（与配置注释同一口径）。 */

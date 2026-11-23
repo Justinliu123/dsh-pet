@@ -5,7 +5,7 @@
  * 必须始终成立：只填缺省、不覆盖显式值；未知字段不透传。
  * @module dsh-pet/src/host/config/merge
  */
-import { CORNER_SET, GLOBAL_DEFAULT_KEYS, isValidPetId, PET_DISPLAY_SET, warnOnce } from './constants.ts';
+import { CORNER_SET, GLOBAL_DEFAULT_KEYS, isValidPetId, warnOnce } from './constants.ts';
 import { isValidSizePercent, SIZE_PERCENT_DEFAULT, SIZE_PERCENT_MIN } from '../../shared/pet-size.ts';
 import { topFieldValid } from './validate.ts';
 
@@ -165,7 +165,6 @@ function mergePet(
     whisperEnabled: petBool(p.whisperEnabled, base.whisperEnabled, label, 'whisperEnabled', id),
     workStatusEnabled: petBool(p.workStatusEnabled, base.workStatusEnabled, label, 'workStatusEnabled', id),
     fixedEnabled: petBool(p.fixedEnabled, base.fixedEnabled, label, 'fixedEnabled', id),
-    display: petEnum(p.display, PET_DISPLAY_SET, base.display, label, 'display', id),
     position: {
       corner: petEnum(ownPos.corner, CORNER_SET, basePos.corner, label, 'position.corner', id),
       marginX: petNumber(ownPos.marginX, basePos.marginX, -Infinity, label, 'position.marginX', id),
@@ -173,7 +172,7 @@ function mergePet(
     },
     // 实例级人设（可选）：只放行非空字符串；没写 / 空串 / 纯空白 / null → 该键不出现在结果里
     // （回落由消费端做：./persona 的 petPersona 取不到实例级就取条目顶层）；非字符串 → 告警 + 忽略。
-    // 这里刻意不填生效值：人设的默认值是所属条目那一份，一旦填进每只实例，/pet-display 写回就会把
+    // 这里刻意不填生效值：人设的默认值是所属条目那一份，一旦填进每只实例，写回就会把
     // 「跟随条目」固化成显式覆盖——之后用户改条目人设，这些实例不再跟着变。
     ...petPersonaField(p.whisperPrompt, label, id),
   };

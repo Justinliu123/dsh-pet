@@ -39,7 +39,7 @@ export async function handleChatRoutes(deps: PetRouteDeps, input: RouteInput): P
     if (method !== 'GET' && method !== 'POST' && method !== 'DELETE') return methodNotAllowed();
     try {
       // `?rounds=`：GET 专属的查看参数——只决定这次读多少轮（不写记忆，也不改变后续对话
-      // 往上下文里带多少，所以 POST 不认它）。与 surface 同一处境：参数级校验放在读盘之前。
+      // 往上下文里带多少，所以 POST 不认它）。与 `?pet=` 同一处境：参数级校验放在读盘之前。
       const roundsRaw = method === 'GET' ? url.searchParams.get('rounds') : null;
       let roundsOverride: number | null = null;
       if (roundsRaw !== null && roundsRaw.trim() !== '') {
@@ -61,8 +61,7 @@ export async function handleChatRoutes(deps: PetRouteDeps, input: RouteInput): P
       // 惰性 + 记忆化：pet 空串时完全不读配置；GET 分支复用同一次读取。
       let cfgCache: Record<string, Record<string, unknown>> | undefined;
       const cfg = (): Record<string, Record<string, unknown>> => (cfgCache ??= readAllConfig(configPaths));
-      // surface 只对 POST 校验：GET 是读记忆、DELETE 是存储管理，跟宠物显示在哪一端无关
-      const who = requirePet(url.searchParams, cfg, { surface: method === 'POST' });
+      const who = requirePet(url.searchParams, cfg);
       if (!who.ok) return who.res;
       const petId = who.petId;
       if (method === 'GET') {

@@ -40,7 +40,7 @@ export function registerProgress(petId: string, read: () => PlaybackProgress): (
 }
 
 /**
- * 读某只宠物在这一页的播放进度；不在这页（未注册 / 未挂载 / `display` 不含 `web`）时为 `null`。
+ * 读某只宠物在这一页的播放进度；不在这页（未注册 / 未挂载）时为 `null`。
  * 每次调用都取当前值，播放中途读到的就是那一刻的位置。
  */
 export function readProgress(petId: string): PlaybackProgress | null {

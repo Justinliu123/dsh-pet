@@ -5,40 +5,17 @@
  * 必须始终成立：同一份输入必得同一棵树，层级顺序稳定。
  * @module dsh-pet/src/shared/menu/tree
  */
-import { DISPLAY_HOTKEY_HINTS, DISPLAY_ORDER } from '../display-hotkey.ts';
-import { type Animations, type Category, type PetDisplay } from '../types.ts';
+import { type Animations, type Category } from '../types.ts';
 import type { MenuBranch, MenuLeaf, MenuMoreItem, MenuNode } from './types.ts';
 
 /** 睡着时仍然放行的菜单动作：维护类、「叫醒它」本身，以及第三方菜单项。
  *  第三方要做什么由它自己决定——真去驱动宠物时会带占用锁调接口，宿主闸门在那一层再判
  *  （锁优先）。在渲染端先拦掉，等于让「更多」里的第三方入口在睡觉时整体失效。 */
-const SLEEP_ALLOWED_ACTIONS: readonly string[] = ['sleep', 'wake', 'home', 'set-display', 'reload', 'third-party'];
+const SLEEP_ALLOWED_ACTIONS: readonly string[] = ['sleep', 'wake', 'home', 'reload', 'third-party'];
 
 /** 该菜单动作在睡着时是否放行（两端共用：对话弹窗、待办面板、动作点播都是渲染端行为，宿主闸门拦不到）。 */
 export const isSleepAllowedAction = (action: string | undefined): boolean =>
   action !== undefined && SLEEP_ALLOWED_ACTIONS.includes(action);
-
-/** 四个显示位置的菜单文案；键是 {@link DISPLAY_ORDER} 的元素，顺序以那边为准。 */
-const DISPLAY_LABELS: Readonly<Record<PetDisplay, string>> = {
-  web: '仅网页',
-  desktop: '仅桌面',
-  both: '两者',
-  none: '都不',
-};
-
-/** 「显示位置」子菜单：两端注入同一份，文案与设置页的显示位置下拉框一致。
- *  两端各写一份必然漂移，而这一项语义对称：桌面端用它把宠物送走，浏览器端用它送到桌面。
- *  「都不」是单向门（恢复入口是设置页），其余三个值都能从某一端改回来。
- *  右侧键帽由 `1`-`4` 数字键的同一份顺序派生，改顺序只改 {@link DISPLAY_ORDER}。 */
-export const displayMenuBranch = (): MenuBranch => ({
-  label: '显示位置',
-  children: DISPLAY_ORDER.map((display, index): MenuLeaf => ({
-    label: DISPLAY_LABELS[display],
-    action: 'set-display',
-    display,
-    hint: DISPLAY_HOTKEY_HINTS[index],
-  })),
-});
 
 /** 第三方菜单项统一收在这个一级菜单下（宿主自己的菜单项不进这里）。 */
 export const MORE_MENU_LABEL = '更多';

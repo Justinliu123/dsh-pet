@@ -72,9 +72,9 @@ async function boot() {
     // 字体族进 documentElement：对话窗/得分弹窗挂在 body 下、继承不到宠物根容器，只能走全局变量。
     // 必须等 /config 拉回来之后才设（字体族来自配置）。
     document.documentElement.style.setProperty('--dsh-pet-font-family', S.fontStackOf(cfg.font.family));
-    const pets = cfg.pets.filter((p) => S.isDesktopVisible(p.display));
+    const pets = cfg.pets;
     if (pets.length === 0) {
-      // 全部宠物只在网页显示是合法状态，不是配置错误：没有桌面宠物就表示本窗口没活儿干，
+      // 配置里一只宠物都没有：没有桌面宠物就表示本窗口没活儿干，
       // 安静关掉、不弹条、不重试。托盘是否还在看 main 条目的 trayEnabled，与这里无关。
       // 宿主流由 syncDesktop() 在配置变化时重建 Helper；手动流需自行重启。
       hideError();

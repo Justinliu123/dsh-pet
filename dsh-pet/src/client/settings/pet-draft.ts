@@ -43,7 +43,6 @@ export function draftPet(template: Pet, id: string): Pet {
     whisperEnabled: template.whisperEnabled,
     workStatusEnabled: template.workStatusEnabled,
     fixedEnabled: template.fixedEnabled,
-    display: template.display,
     position: { ...template.position },
   } as Pet;
 }

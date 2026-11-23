@@ -37,7 +37,6 @@ const BASE = {
       whisperEnabled: false,
       workStatusEnabled: false,
       fixedEnabled: false,
-      display: 'web',
       position: { corner: 'bottom-right', marginX: 40, marginY: 40 },
     },
   ],
@@ -203,7 +202,7 @@ describe('readAllConfig —— animations.sleep（可选段）校验', () => {
     writeFileSync(
       join(paths.petDir, 'pig-config.json'),
       JSON.stringify({
-        pets: [{ id: 'pig1', name: '猪', display: 'web' }],
+        pets: [{ id: 'pig1', name: '猪' }],
         animations: BASE.animations,
         animationWeights: BASE.animationWeights,
       }),
@@ -853,7 +852,7 @@ describe('readAllConfig —— 实例级人设 whisperPrompt（实例覆盖 / �
   });
 
   test('没写 → 结果里**没有**该键（回落条目由消费端做，合并器不填生效值）', () => {
-    // 合并器一旦把条目人设填进每只实例，/pet-display（拿合并结果回调 saveUserConfig 写盘）
+    // 合并器一旦把条目人设填进每只实例，保存入口（拿合并结果回调 saveUserConfig 写盘）
     // 就会把"跟随条目"固化成显式覆盖，之后改条目人设这些实例不再跟着变——这条钉住它。
     const pet = petAt(readAllConfig(withBase({})));
     assert.equal('whisperPrompt' in pet, false);
@@ -918,7 +917,7 @@ describe('saveUserConfig —— 实例级人设 whisperPrompt（白名单 + 清�
     assert.equal(saveOnce({ pets: [{ ...PETS[0], whisperPrompt: 42 }] }), null);
   });
 
-  test('/pet-display 式往返：合并结果直接喂回 save，人设不丢（也不会被写成空串）', () => {
+  test('合并结果直接喂回 save：人设不丢（也不会被写成空串）', () => {
     const merged = readAllConfig(withBase({}, { pets: [{ ...BASE.pets[0], whisperPrompt: '我是猫娘' }] }));
     const layerPets = merged.main.pets as Record<string, unknown>[];
     assert.equal(petAt(saveOnce({ pets: layerPets })).whisperPrompt, '我是猫娘');
@@ -1439,7 +1438,6 @@ describe('文件宠物条目 —— 全局默认（用户层作基座）+ 种类
         name: '小猪',
         size: 300,
         balanceEnabled: false,
-        display: 'web',
         position: { corner: 'top-left', marginX: 10, marginY: 10 },
       },
     ],

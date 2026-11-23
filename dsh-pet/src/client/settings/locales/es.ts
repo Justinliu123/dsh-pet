@@ -42,7 +42,6 @@ export const es: Record<Key, string> = {
   shortcutRowPaste: 'Pegar imagen',
   shortcutRowTodo: 'Tareas',
   shortcutRowSleep: 'Dormir / despertar',
-  shortcutRowDisplay: 'Posición de visualización',
   shortcutRowSidebar: 'Abrir el chat lateral',
   shortcutGroupPet: 'Atajos de la mascota',
   shortcutGroupPetHint:
@@ -82,12 +81,6 @@ export const es: Record<Key, string> = {
   fixedEnabled: 'Fijar en el sitio',
   fixedEnabledHint:
     'Cuando está activado, la cadena aleatoria ya no gira ni aleja a esta mascota: solo se reproducen acciones de reposo y en el sitio. Las selecciones con clic derecho, los disparos por API y las animaciones de saldo / susurro / estado de trabajo no se ven afectados.',
-  displayLabel: 'Visualización',
-  displayHint: 'web = solo navegador / desktop = solo escritorio / both = ambos / none = ninguno',
-  'display.web': 'Solo navegador',
-  'display.desktop': 'Solo escritorio',
-  'display.both': 'Ambos',
-  'display.none': 'Ninguno',
   cornerLabel: 'Posición',
   'corner.top-left': 'Arriba a la izquierda',
   'corner.top-right': 'Arriba a la derecha',
@@ -160,7 +153,7 @@ export const es: Record<Key, string> = {
     'Varios monitores: cuando está activado, la mascota solo se mueve dentro de la pantalla en la que está: una mascota lanzada rebota únicamente dentro de la pantalla donde se soltó (las uniones entre pantallas actúan como muros, así que nunca vuela al monitor vecino), y el vagabundeo autónomo solo camina dentro de la pantalla actual (el paso que cruzaría la unión se cancela). Desactívalo para permitir vuelos y caminatas entre pantallas. Solo afecta al modo escritorio: el overlay del navegador ya se queda dentro del viewport.',
   trayToggle: 'Bandeja del sistema',
   trayToggleHint:
-    'Muestra un icono en la bandeja (área de notificaciones en Windows, barra de menús en macOS) cuando el modo escritorio está activo. Lista todas las mascotas de la configuración y alterna cada una entre escritorio y web/ninguno, incluidas las que ahora no están en el escritorio y no tienen ventana donde hacer clic derecho. Con esto desactivado, para devolver una mascota al escritorio hay que abrir el navegador (la página de configuración o el clic derecho sobre la mascota web). Windows ya oculta los iconos de terceros en «iconos ocultos». Solo afecta al modo escritorio.',
+    'Muestra un icono en la bandeja (área de notificaciones en Windows, barra de menús en macOS) cuando el modo escritorio está activo. El menú solo ofrece «Salir», para poder cerrar la mascota de escritorio aunque no haya ninguna ventana a la vista. Windows ya oculta los iconos de terceros en «iconos ocultos». Solo afecta al modo escritorio.',
   voiceTitle: 'Voz',
   voiceHint:
     'Cuatro interruptores y una voz: cada tipo de locución tiene su propio interruptor y ninguno depende de otro. Todo desactivado por defecto; se escribe en la configuración del usuario al "Guardar" (nunca al instante).',

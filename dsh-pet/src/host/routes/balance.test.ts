@@ -27,7 +27,6 @@ function makeDeps(overrides: Partial<PetRouteDeps> = {}): { deps: PetRouteDeps; 
       String(params.get('pet') ?? '') === 'main'
         ? { ok: true as const, petId: 'main', entry: 'main', conf: {} }
         : { ok: false as const, res: failResult('unknown-pet', '没有这只桌宠') },
-    surfaceBlocked: () => null,
     lockBlocked: () => null,
     refreshBalance: async (manual?: boolean, petId?: string) => {
       calls.push({ manual: manual === true, ...(petId === undefined ? {} : { petId }) });
@@ -80,7 +79,7 @@ describe('/balance —— 不带 pet：全局刷新', () => {
 describe('/balance —— 带 pet：只让该宠物显示', () => {
   test('校验通过后把 petId 交给刷新函数', async () => {
     const { deps, calls } = makeDeps();
-    const b = body(await handleBalanceRoutes(deps, post('?pet=main&surface=web')));
+    const b = body(await handleBalanceRoutes(deps, post('?pet=main')));
 
     assert.deepEqual(b, { ok: true });
     assert.deepEqual(calls, [{ manual: true, petId: 'main' }]);
@@ -88,23 +87,14 @@ describe('/balance —— 带 pet：只让该宠物显示', () => {
 
   test('宠物不存在 → unknown-pet，且一次都不刷新', async () => {
     const { deps, calls } = makeDeps();
-    const b = body(await handleBalanceRoutes(deps, post('?pet=ghost&surface=web')));
+    const b = body(await handleBalanceRoutes(deps, post('?pet=ghost')));
     assert.equal(b.reason, 'unknown-pet');
     assert.deepEqual(calls, [], '门禁拦住的请求不该触发查询');
   });
 
-  test('显示端门禁拦住 → 原样返回，不刷新', async () => {
-    const { deps, calls } = makeDeps({
-      surfaceBlocked: () => failResult('pet-not-displayed', '这只宠物当前不在这一端'),
-    } as Partial<PetRouteDeps>);
-    const b = body(await handleBalanceRoutes(deps, post('?pet=main&surface=web')));
-    assert.equal(b.reason, 'pet-not-displayed');
-    assert.deepEqual(calls, []);
-  });
-
   test('占用锁门禁拦住 → 原样返回，不刷新', async () => {
     const { deps, calls } = makeDeps({ lockBlocked: () => failResult('locked', '正被占用') } as Partial<PetRouteDeps>);
-    const b = body(await handleBalanceRoutes(deps, post('?pet=main&surface=web')));
+    const b = body(await handleBalanceRoutes(deps, post('?pet=main')));
     assert.equal(b.reason, 'locked');
     assert.deepEqual(calls, []);
   });

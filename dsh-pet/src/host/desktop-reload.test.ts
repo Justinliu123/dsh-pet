@@ -5,7 +5,7 @@
  * 桌面端不会自己跟上；菜单项「重载配置」把这条路径显式暴露出来（浏览器端刷新页面即可，故为桌面专属）。
  *
  * 重载必须复用 syncDesktop()（串行队列 + 等旧进程真正退出），不得自己实现一套停/起：
- *   ① 每只桌面宠物一个窗口，是宿主启动时按 DSH_PET_PETS 建的——就地重拉改不了宠物数量 / display / size；
+ *   ① 每只桌面宠物一个窗口，是宿主启动时按 DSH_PET_PETS 建的——就地重拉改不了宠物数量 / size；
  *   ② 余额 / 触发计数 / 工作状态等全局轮询由 events.js 的 loopsStarted 一次性启动，就地重建 sprite 会漏启新循环或留下旧定时器。
  *
  * 本文件钉住跨半侧契约（两半各自构建、无法互相 import，只能读源码断言）：
@@ -68,16 +68,11 @@ describe('桌面端「重载配置」—— 菜单 → 宿主重启 Helper', () 
     assert.ok(!/action: 'reload'/.test(clientPet), '浏览器端不得有 reload 菜单项（它会重启整个桌面 Helper）');
   });
 
-  test('requestRestart 是唯一的重启入口：四个写接口与「重载配置」都走它', () => {
+  test('requestRestart 是唯一的重启入口：三个写接口与「重载配置」都走它', () => {
     // 按模块断言「这条路由里有调用」，而不是数全仓调用点：以后新增写接口不该让用例变红，
     // 而某个既有接口丢了重启必须红。调用点可能写作 `void requestRestart()` 或 `void deps.requestRestart()`。
     const call = /void (?:deps\.)?requestRestart\(\)/;
-    for (const rel of [
-      './routes/config/save.ts',
-      './routes/config/display.ts',
-      './routes/config/entry.ts',
-      './routes/desktop.ts',
-    ]) {
+    for (const rel of ['./routes/config/save.ts', './routes/config/entry.ts', './routes/desktop.ts']) {
       assert.ok(call.test(readSource(rel)), rel + ' 必须经 requestRestart() 重启 Helper（自己停/起会与串行队列打架）');
     }
   });

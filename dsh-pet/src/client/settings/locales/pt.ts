@@ -40,7 +40,6 @@ export const pt: Record<Key, string> = {
   shortcutRowPaste: 'Colar imagem',
   shortcutRowTodo: 'Tarefas',
   shortcutRowSleep: 'Dormir / acordar',
-  shortcutRowDisplay: 'Posição de exibição',
   shortcutRowSidebar: 'Abrir chat lateral',
   shortcutGroupPet: 'Atalhos do pet',
   shortcutGroupPetHint:
@@ -80,12 +79,6 @@ export const pt: Record<Key, string> = {
   fixedEnabled: 'Fixar no lugar',
   fixedEnabledHint:
     'Quando ativado, a cadeia aleatória não gira nem afasta mais este pet — só tocam as ações de espera no lugar. Escolhas pelo menu de contexto, gatilhos da API e animações de saldo / sussurro / status de trabalho não são afetadas.',
-  displayLabel: 'Exibição',
-  displayHint: 'web = só no navegador / desktop = só no desktop / both = nos dois / none = em nenhum',
-  'display.web': 'Só no navegador',
-  'display.desktop': 'Só no desktop',
-  'display.both': 'Nos dois',
-  'display.none': 'Em nenhum',
   cornerLabel: 'Posição',
   'corner.top-left': 'Canto superior esquerdo',
   'corner.top-right': 'Canto superior direito',
@@ -157,7 +150,7 @@ export const pt: Record<Key, string> = {
     'Vários monitores: quando ligado, o pet fica dentro da tela em que está — um pet arremessado quica só na tela onde foi solto (as emendas entre telas viram paredes, ele não voa para a tela vizinha), e o passeio autônomo só anda dentro da tela atual (o passo que cruzaria a emenda é cancelado). Desligado, ele cruza telas normalmente. Só afeta o modo desktop — o overlay do navegador já fica dentro da viewport.',
   trayToggle: 'Bandeja do sistema',
   trayToggleHint:
-    'Mostra um ícone na área de notificação (barra de menus no macOS) quando o modo desktop inicia. Ele lista todos os pets da configuração e alterna a exibição de cada um — inclusive os que estão fora do desktop agora e não têm janela para clicar com o botão direito. Sem ele, para trazer um pet de volta ao desktop é preciso abrir o navegador (a página de configuração, ou clicar com o botão direito no pet na web). O Windows já esconde ícones de terceiros na gaveta "ícones ocultos". Só afeta o modo desktop.',
+    'Mostra um ícone na área de notificação (barra de menus no macOS) quando o modo desktop inicia. O menu só oferece "Sair", para encerrar o pet de desktop mesmo sem nenhuma janela visível. O Windows já esconde ícones de terceiros na gaveta "ícones ocultos". Só afeta o modo desktop.',
   voiceTitle: 'Voz',
   voiceHint:
     'Quatro interruptores e uma voz: cada tipo de fala tem o próprio interruptor e nenhum depende de outro. Tudo desligado por padrão; gravado na configuração do usuário ao "Salvar" (nunca na hora).',

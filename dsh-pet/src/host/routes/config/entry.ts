@@ -1,8 +1,8 @@
 /**
  * 整条目写回（POST /pet-config）：把一个「种类」的全部实例写回它自己的配置文件。
  *
- * 补的是两个既有写端点之间的空档：PUT /config 只写用户主配置，POST /pet-display 只改单只的
- * display。写入语义与这两条一致——白名单重建 + 磁盘原值透传 + 写后广播并重启 Helper。
+ * 补的是两个既有写端点之间的空档：PUT /config 只写用户主配置，本端点写「种类」层的全部实例。
+ * 写入语义与那条一致——白名单重建 + 磁盘原值透传 + 写后广播并重启 Helper。
  * 不碰全局字段（只归 main 层），也不改条目级的动画池与人设。
  * @module dsh-pet/src/host/routes/config/entry
  */
@@ -18,7 +18,7 @@ const MAIN_ENTRY = 'main';
 
 /** 实例数组非法时的统一文案：saveUserConfig 只回 null，细节必须在这里讲清。 */
 const INVALID_PETS =
-  'pets 非法：必须是该种类的全部实例（至少 1 只），每只 id 唯一，size / balanceEnabled / display / position 齐全合法';
+  'pets 非法：必须是该种类的全部实例（至少 1 只），每只 id 唯一，size / balanceEnabled / position 齐全合法';
 
 /**
  * 找出与其它条目冲突的实例 id。
@@ -95,10 +95,6 @@ export async function savePetLayer(deps: PetRouteDeps, input: RouteInput): Promi
   }
   // 配置变更信号：只在写盘成功之后，否则失败时浏览器会白重拉一次 /config。
   deps.state.writeSection('config', {});
-  // 隐藏即用户接管：与 POST /pet-display 同口径撤销占用，避免宠物被锁到 TTL 到点（issue #122）。
-  for (const pet of instances) {
-    if (pet.display === 'none') deps.lock.release({ petId: String(pet.id), force: true });
-  }
   // 不 await：发起者可能就是即将被这次重载换掉的桌面 Helper。
   void deps.requestRestart();
   return okResult(readAllConfig(deps.configPaths));

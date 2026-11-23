@@ -38,7 +38,6 @@ function harness(overrides: Partial<MenuActionDeps> = {}) {
     openChat: () => calls.push('openChat'),
     openTodo: () => calls.push('openTodo'),
     report: (id, status, reason) => calls.push(`report:${id}:${status}:${reason}`),
-    applyMerged: () => calls.push('applyMerged'),
     warn: (message) => calls.push('warn:' + message.slice(0, 20)),
     ...overrides,
   };
@@ -62,12 +61,6 @@ describe('createMenuActions —— 内置动作', () => {
     const { actions, calls } = harness();
     actions.run({ label: '待办事项', action: 'todo' } as MenuLeaf);
     assert.deepEqual(calls, ['openTodo']);
-  });
-
-  test('显示位置：没有 display 就什么都不做', () => {
-    const { actions, calls } = harness();
-    actions.run({ label: '显示位置', action: 'set-display' } as MenuLeaf);
-    assert.deepEqual(calls, []);
   });
 });
 
@@ -144,7 +137,7 @@ describe('createMenuActions —— 配图碎碎念', () => {
     }
     assert.equal(captured.urls.length, 1, '一次点击只该发一次请求');
     const url = captured.urls[0] ?? '';
-    assert.match(url, /\/whisper\?pet=pet-1&surface=web&image=/, '应带上 image 参数');
+    assert.match(url, /\/whisper\?pet=pet-1&image=/, '应带上 image 参数');
     assert.ok(url.endsWith(encodeURIComponent('大的要来啦')), '中文与空格必须编码：' + url);
   });
 
@@ -160,7 +153,7 @@ describe('createMenuActions —— 配图碎碎念', () => {
     assert.doesNotMatch(captured.urls[0] ?? '', /image=/, '没点名具体图就不该带 image 参数');
   });
 
-  test('查询天气：POST /environment，带 pet、surface=any 与 fresh=1', async () => {
+  test('查询天气：POST /environment，带 pet 与 fresh=1', async () => {
     const captured = captureFetch();
     try {
       harness().actions.run({ label: '查询天气', action: 'show-environment' } as MenuLeaf);
@@ -170,10 +163,10 @@ describe('createMenuActions —— 配图碎碎念', () => {
     }
     assert.equal(captured.urls.length, 1, '一次点击只该发一次请求');
     const url = captured.urls[0] ?? '';
-    assert.match(url, /\/environment\?pet=pet-1&surface=any&fresh=1$/, '必须强制刷新：' + url);
+    assert.match(url, /\/environment\?pet=pet-1&fresh=1$/, '必须强制刷新：' + url);
   });
 
-  test('查看余额：POST /balance 带上 pet 与 surface，只让被点的那只弹', async () => {
+  test('查看余额：POST /balance 带上 pet，只让被点的那只弹', async () => {
     const captured = captureFetch();
     try {
       harness().actions.run({ label: '查看余额', action: 'show-balance' } as MenuLeaf);
@@ -182,7 +175,7 @@ describe('createMenuActions —— 配图碎碎念', () => {
       captured.restore();
     }
     assert.equal(captured.urls.length, 1, '一次点击只该发一次请求');
-    assert.match(captured.urls[0] ?? '', /\/balance\?pet=pet-1&surface=any$/, '应带归属参数：' + captured.urls[0]);
+    assert.match(captured.urls[0] ?? '', /\/balance\?pet=pet-1$/, '应带归属参数：' + captured.urls[0]);
   });
 });
 

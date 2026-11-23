@@ -8,14 +8,13 @@ import { readAllConfig } from '../config.ts';
 import { decideAnim } from '../anim.ts';
 import { decidePosition, decideThrow, positionLeafData } from '../motion-cue.ts';
 import { normalizePoseInput } from '../pose.ts';
-import { displayCovers } from '../surface.ts';
 import type { PetRouteDeps, RouteInput } from './types.ts';
 import type { RouteResult } from '../http.ts';
 import { failResult, invalidJson, methodNotAllowed, okResult } from './result.ts';
 
 /** 动作与位置领域：未命中返回 undefined，命中返回应答。 */
 export async function handleMotionRoutes(deps: PetRouteDeps, input: RouteInput): Promise<RouteResult | undefined> {
-  const { configPaths, lockBlocked, playback, pose, requirePet, state, surfaceBlocked } = deps;
+  const { configPaths, lockBlocked, playback, pose, requirePet, state } = deps;
   const { body, method, rest, url } = input;
 
   // 点播动画：POST /anim?pet=，name 与 url 恰好给一个。
@@ -44,9 +43,6 @@ export async function handleMotionRoutes(deps: PetRouteDeps, input: RouteInput):
         facing: o.facing,
       });
       if (!d.ok) return failResult(d.reason, d.message);
-      // 显示端对齐：不满足 → pet-not-displayed（+ 实际 display），早于锁门禁
-      const noSurface = surfaceBlocked(cfg, d.petId, url.searchParams);
-      if (noSurface) return noSurface;
       // 占用门禁：持锁者自己的点播照放行（那是它的演出），别人一律拒
       const blocked = lockBlocked(d.petId, url.searchParams);
       if (blocked) return blocked;
@@ -93,8 +89,6 @@ export async function handleMotionRoutes(deps: PetRouteDeps, input: RouteInput):
           duration: o.duration,
         });
         if (!d.ok) return failResult(d.reason, d.message);
-        const noSurface = surfaceBlocked(cfg, d.petId, url.searchParams);
-        if (noSurface) return noSurface;
         const blocked = lockBlocked(d.petId, url.searchParams);
         if (blocked) return blocked;
         // 叶子按模式收敛成最小形状：非 line 模式不带 duration（见 positionLeafData）
@@ -104,8 +98,6 @@ export async function handleMotionRoutes(deps: PetRouteDeps, input: RouteInput):
       }
       const d = decideThrow({ cfg, requested, angle: o.angle, power: o.power });
       if (!d.ok) return failResult(d.reason, d.message);
-      const noSurface = surfaceBlocked(cfg, d.petId, url.searchParams);
-      if (noSurface) return noSurface;
       const blocked = lockBlocked(d.petId, url.searchParams);
       if (blocked) return blocked;
       state.writePet(d.petId, 'throw', { angle: d.angle, power: d.power });
@@ -120,7 +112,7 @@ export async function handleMotionRoutes(deps: PetRouteDeps, input: RouteInput):
   // 桌面宠物一窗一只，位置全局唯一一份，宿主快照语义干净；网页端的位置天生每个页面一份
   // （两个标签页本来就不同），塞进宿主快照必然错，所以网页端走页面内的 Cordis 只读服务
   // `petApi7340`，字段名与坐标口径与这里完全一致。
-  // 上报是变化时推 + 节流，不是轮询。本端点不要求 surface：它是读端点，定义域本身只有一个面。
+  // 上报是变化时推 + 节流，不是轮询。
   if (rest === 'pose' || rest === 'pose/report') {
     const isReport = rest === 'pose/report';
     if (isReport && method !== 'POST') return methodNotAllowed();
@@ -142,15 +134,6 @@ export async function handleMotionRoutes(deps: PetRouteDeps, input: RouteInput):
         if (!p.ok) return failResult(p.reason, p.message);
         pose.set(who.petId, p.pose);
         return okResult({ ok: true });
-      }
-      // 桌面端实况只对「显示在桌面」的宠物有意义：配置上就不在桌面 → 明确不可用（附实际 display）
-      const display = String(who.pet.display ?? '');
-      if (!displayCovers('desktop', display)) {
-        return failResult(
-          'pet-not-displayed',
-          who.petId + ' 的显示模式是 ' + display + '；桌面端实况只对 display 含 desktop 的宠物有',
-          { display },
-        );
       }
       const snap = pose.get(who.petId);
       if (snap === undefined) {

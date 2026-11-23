@@ -43,7 +43,7 @@ export default defineConfig([
     // 浏览器半侧必须能被**重复执行**：DSH 把 lib/client.js 当经典脚本加载，而 bundle
     // 重建后（HMR 换 rev）或 combo 请求重试时，同一个文件会在同一页面里再执行一次。
     // 经典脚本的顶层 const/let/function 落在页面的全局词法作用域，第二次解析直接
-    // SyntaxError（Identifier 'PET_DISPLAYS' has already been declared），entry 激活
+    // SyntaxError（Identifier 'ROUTE_PATH' has already been declared），entry 激活
     // 失败 → 桌宠 overlay 与设置页插槽都不注册，只能刷新才恢复。因此整份产物包一层
     // IIFE，让所有模块体声明留在函数作用域内；前导 ';' 抵消 combo 拼接（多个插件
     // bundle 连成一个脚本）时的 ASI 歧义。

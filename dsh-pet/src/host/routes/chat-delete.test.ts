@@ -1,5 +1,5 @@
 /**
- * `DELETE /chat` 的契约测试：参数解析、方法白名单与「删除不走 surface 校验」。
+ * `DELETE /chat` 的契约测试：参数解析、方法白名单与「删除是存储管理」。
  *
  * 直接测导出的路由处理函数，不启 HTTP 服务：删除的记忆读写行为由 chat-memory.test.ts 覆盖，
  * 这里只钉「路由把什么交给了服务层」——参数被解析成什么、什么情况一次都不该调用。
@@ -36,9 +36,9 @@ function makeDeps(): { deps: PetRouteDeps; calls: DeleteCall[] } {
 }
 
 /** 一次 DELETE /chat；`query` 直接拼在 `?pet=main` 之后（如 `&ts=1&ts=2`）。 */
-function del(query = '', surface = 'web'): RouteInput {
+function del(query = ''): RouteInput {
   return {
-    url: new URL(`http://127.0.0.1/dsh-pet-7340/chat?pet=main&surface=${surface}${query}`),
+    url: new URL(`http://127.0.0.1/dsh-pet-7340/chat?pet=main${query}`),
     rest: 'chat',
     method: 'DELETE',
   };
@@ -81,9 +81,14 @@ describe('DELETE /chat —— 删除对话记忆', () => {
     assert.equal((result as { status: number }).status, 405);
   });
 
-  test('不校验 surface：删除是存储管理，与宠物显示在哪一端无关', async () => {
+  test('传了 surface 也被忽略：删除是存储管理，照常成功', async () => {
+    // 显示位置已收敛为「只显示在桌面端」，surface 参数整个不再参与判定：连非法值也不该拦住删除。
     const { deps, calls } = makeDeps();
-    const b = body(await handleChatRoutes(deps, del('', 'nope')));
+    const withSurface: RouteInput = {
+      ...del(),
+      url: new URL('http://127.0.0.1/dsh-pet-7340/chat?pet=main&surface=nope'),
+    };
+    const b = body(await handleChatRoutes(deps, withSurface));
     assert.equal(b.ok, true, '非法 surface 不该拦住删除');
     assert.equal(calls.length, 1);
   });

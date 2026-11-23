@@ -3,7 +3,7 @@
  *
  * 不实现各服务商的取数协议（归 ./balance/providers）。
  * `pet` 缺省 = 全局刷新，所有开了余额的宠物照常显示（第三方与斜杠命令走这条）；
- * 给了就只让该宠物显示，并依次过显示端与占用锁门禁（睡觉由分发器统一挡）。
+ * 给了就只让该宠物显示，并过占用锁门禁（睡觉由分发器统一挡）。
  * 依赖（PetRouteDeps）显式传入，模块内不读全局、不建状态。
  * @module dsh-pet/src/host/routes/balance
  */
@@ -14,7 +14,7 @@ import { failResult, methodNotAllowed, okResult } from './result.ts';
 
 /** 余额领域：未命中返回 undefined，命中返回应答。 */
 export async function handleBalanceRoutes(deps: PetRouteDeps, input: RouteInput): Promise<RouteResult | undefined> {
-  const { configPaths, lockBlocked, refreshBalance, requirePet, surfaceBlocked } = deps;
+  const { configPaths, lockBlocked, refreshBalance, requirePet } = deps;
   const { method, rest, url } = input;
 
   // 余额：POST /balance 立即刷新一次并写入 S，返回 {ok}——不返回余额数据，数据只有 /state 一个出口。
@@ -30,11 +30,8 @@ export async function handleBalanceRoutes(deps: PetRouteDeps, input: RouteInput)
   }
   try {
     const cfg = readAllConfig(configPaths);
-    const who = requirePet(url.searchParams, () => cfg, { surface: true });
+    const who = requirePet(url.searchParams, () => cfg);
     if (!who.ok) return who.res;
-    // 与 /broadcast、/environment 同一套门禁顺序：先看能不能显示，再看有没有被占用
-    const noSurface = surfaceBlocked(cfg, who.petId, url.searchParams);
-    if (noSurface) return noSurface;
     const blocked = lockBlocked(who.petId, url.searchParams);
     if (blocked) return blocked;
     await refreshBalance(true, who.petId);

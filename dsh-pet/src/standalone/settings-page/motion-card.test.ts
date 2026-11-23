@@ -72,7 +72,6 @@ function probe(): Probe {
       voices: [],
       defaultVoice: 'edge/zh-CN-XiaoyiNeural',
       fonts: [],
-      displays: [],
       corners: [],
       physics: {},
       font: {},

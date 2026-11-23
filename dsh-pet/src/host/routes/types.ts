@@ -19,7 +19,6 @@ import type { PlaybackStore } from '../playback.ts';
 import type { PoseStore } from '../pose.ts';
 import type { SleepStore } from '../sleep.ts';
 import type { PollStateStore } from '../state.ts';
-import type { VoiceTarget } from '../surface.ts';
 import type { TodoStore } from '../todo/store.ts';
 import type { HearService } from '../voice/hear.ts';
 import type { VoiceService } from '../voice/speak.ts';
@@ -82,23 +81,13 @@ export interface PetRouteDeps {
   /** 外部写入用的固定会话 id。 */
   readonly EXTERNAL_WORK_SESSION: string;
   /** 占用锁拦截：被别的会话占着时直接给出应答。 */
-  readonly surfaceBlocked: (
-    cfg: Record<string, Record<string, unknown>>,
-    petId: string,
-    params: URLSearchParams,
-  ) => RouteResult | null;
-  /** 同上，按 petId 判定。 */
   readonly lockBlocked: (petId: string, params: URLSearchParams) => RouteResult | null;
   /** 用户主配置路径。 */
   readonly userConfigPath: string;
   /** 请求重载桌面 Helper：是否真的重启、如何串行与退避由桌面侧决定（调用方只表达意图）。 */
   readonly requestRestart: () => Promise<void>;
   /** 按 `?pet=` 定位宠物；缺参/未知宠物给出可直接返回的应答。 */
-  readonly requirePet: (
-    params: URLSearchParams,
-    cfg: () => Record<string, Record<string, unknown>>,
-    opts?: { surface?: boolean },
-  ) => PetLookup;
+  readonly requirePet: (params: URLSearchParams, cfg: () => Record<string, Record<string, unknown>>) => PetLookup;
   /** 播放记录表。 */
   readonly playback: PlaybackStore;
   /** 用户数据根。 */
@@ -134,13 +123,8 @@ export interface PetRouteDeps {
   /** 查此刻的环境（城市 + 天气）；fresh 为真时跳过缓存强制重查。 */
   readonly environment: (opts?: { fresh?: boolean; city?: string }) => Promise<EnvironmentFacts>;
   /** 生成一条碎碎念；image 给了就用这张图（需在池内），缺省 = 按配置随机抽一张或纯文本。
-   *  voiceTo 由带 `?surface=` 的路由传请求面；kind=whisper 时按 voiceWhisperEnabled 决定要不要念。 */
-  readonly publishWhisper: (
-    petId: string,
-    image?: string,
-    voiceTo?: VoiceTarget,
-    kind?: 'whisper' | 'manual',
-  ) => Promise<GeneratedReply>;
+   *  kind=whisper 时按 voiceWhisperEnabled 决定要不要念。 */
+  readonly publishWhisper: (petId: string, image?: string, kind?: 'whisper' | 'manual') => Promise<GeneratedReply>;
   /** 读取对话记忆文件。 */
   readonly readMemory: () => Promise<Record<string, Record<string, { messages: ChatMemoryMessage[] }>>>;
   /** 对话记忆文件路径。 */

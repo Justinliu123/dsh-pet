@@ -11,7 +11,6 @@ import { EDGE_PROVIDER, EDGE_PROVIDER_ID } from '../host/voice/builtin-edge.ts';
 import { limitedVoiceId } from '../host/voice/types.ts';
 import { VOICES, DEFAULT_VOICE } from '../host/voice/voices.ts';
 import { LOGO_URL } from '../shared/avatar.ts';
-import { PET_DISPLAYS } from '../shared/config.ts';
 import { ROUTE_SEGMENT } from '../shared/constants.ts';
 import { DEFAULT_FONT, FONT_PRESETS } from '../shared/fonts.ts';
 import { POWERCONTEXT_MEMORY_ID } from '../shared/memory.ts';
@@ -56,7 +55,6 @@ export const settingsScript = [
     })),
     defaultVoice: limitedVoiceId(EDGE_PROVIDER_ID, DEFAULT_VOICE),
     fonts: FONT_PRESETS.map((preset) => preset.id),
-    displays: PET_DISPLAYS,
     corners: [...CORNER_SET],
     physics: DEFAULT_PHYSICS,
     font: DEFAULT_FONT,

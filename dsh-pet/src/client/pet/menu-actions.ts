@@ -1,5 +1,5 @@
 /**
- * 右键菜单的动作派发：把菜单叶子（内置动作、第三方项、显示位置、点播动画）翻译成一次副作用。
+ * 右键菜单的动作派发：把菜单叶子（内置动作、第三方项、点播动画）翻译成一次副作用。
  * 只做「点了之后发生什么」，不建菜单、不管浮层定位与开关时序——那些归右键入口。
  * 依赖以取值函数注入，避免捕获渲染期的状态快照。
  * @module dsh-pet/src/client/pet/menu-actions
@@ -13,7 +13,7 @@ import { setMenuClick } from '../menu-service.ts';
 
 /** 菜单派发的依赖。 */
 export interface MenuActionDeps {
-  /** 宠物 id：上报、点播与显示位置切换都要带。 */
+  /** 宠物 id：上报与点播都要带。 */
   petId: string;
   /** 该宠物的动画池（移动池、分类镜像规则都读它）。 */
   animations: () => Animations;
@@ -37,8 +37,6 @@ export interface MenuActionDeps {
   openTodo: () => void;
   /** 上报点播回执。 */
   report: (playbackId: string, status: 'failed', reason: string) => void;
-  /** 显示位置切换后，把宿主回的成品聚合交给容器重渲染。 */
-  applyMerged: (merged: Record<string, Record<string, unknown>>) => void;
   /** 动作失败时打一行告警（文案自带原因）。 */
   warn: (message: string) => void;
   /** 是否在睡：睡着时任何「打扰类」动作只弹拒绝台词、不执行。缺省视为醒着。 */
@@ -65,25 +63,6 @@ export interface MenuActions {
    *  渲染端不判睡觉，放不放行由宿主闸门按「锁优先」决定。
    */
   run: (leaf: MenuLeaf, playbackId?: string, keepFacing?: boolean, hostInstruction?: boolean) => void;
-}
-
-/** 显示位置：写配置后宿主回成品聚合，交给容器重渲染。 */
-async function switchDisplay(deps: MenuActionDeps, display: string): Promise<void> {
-  try {
-    const response = await fetch(ROUTE_PATH + '/pet-display', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: deps.petId, display }),
-    });
-    if (!response.ok) throw new Error('pet-display HTTP ' + response.status);
-    const body = (await response.json()) as Record<string, unknown>;
-    // 业务失败是 HTTP 200 + {ok:false, reason}：只看状态码会把失败体当成成品聚合。
-    if (body.ok === false) throw new Error('pet-display 被拒：' + String(body.reason ?? ''));
-    // 响应体就是改动后的成品聚合，必须交给容器；否则会再拉一次 GET /config，可能拿到旧值。
-    deps.applyMerged(body as Record<string, Record<string, unknown>>);
-  } catch (error) {
-    deps.warn('[dsh-pet] 显示位置切换失败 ' + (error instanceof Error ? error.message : String(error)));
-  }
 }
 
 /**
@@ -141,25 +120,24 @@ export function createMenuActions(deps: MenuActionDeps): MenuActions {
     }
     if (leaf.action === 'show-balance') {
       // 动作端点让宿主刷新并写入 /state，页面什么都不用做。
-      // 带 pet：这次只让被点的那只弹气泡；surface=any = 点菜单的一端不一定是渲染端。
+      // 带 pet：这次只让被点的那只弹气泡。
       console.info('[dsh-pet] 菜单查看余额 pet=' + petId);
-      fireAction(ROUTE_PATH + '/balance?pet=' + encodeURIComponent(petId) + '&surface=any', '余额刷新动作');
+      fireAction(ROUTE_PATH + '/balance?pet=' + encodeURIComponent(petId), '余额刷新动作');
       return;
     }
     if (leaf.action === 'show-environment') {
       // 与余额同一套：宿主强制刷新并写 sections.env，气泡由 /state 驱动。
-      // surface=any：点菜单的这一端不一定就是渲染端，宿主只按 petId 记给气泡。
       console.info('[dsh-pet] 菜单查询天气 pet=' + petId);
-      fireAction(ROUTE_PATH + '/environment?pet=' + encodeURIComponent(petId) + '&surface=any&fresh=1', '天气查询动作');
+      fireAction(ROUTE_PATH + '/environment?pet=' + encodeURIComponent(petId) + '&fresh=1', '天气查询动作');
       return;
     }
     if (leaf.action === 'whisper') {
-      // 手动碎碎念：文本随长轮询送达，不受 whisperEnabled 限制；surface 必填，本页面就是网页端。
+      // 手动碎碎念：文本随长轮询送达，不受 whisperEnabled 限制。
       console.info('[dsh-pet] 菜单触发碎碎念 pet=' + petId + (leaf.image ? ' image=' + leaf.image : ''));
       // 「配图」菜单点的是具体某张 → 带名称让宿主用这张（不在池内宿主会回 unknown-image）；
       // 其余入口不带，仍按配置随机抽图。名称可能含空格与中文，必须编码。
       const pic = leaf.image ? '&image=' + encodeURIComponent(leaf.image) : '';
-      fireAction(ROUTE_PATH + '/whisper?pet=' + encodeURIComponent(petId) + '&surface=web' + pic, '碎碎念手动触发');
+      fireAction(ROUTE_PATH + '/whisper?pet=' + encodeURIComponent(petId) + pic, '碎碎念手动触发');
       return;
     }
     if (leaf.action === 'chat') {
@@ -168,13 +146,6 @@ export function createMenuActions(deps: MenuActionDeps): MenuActions {
     }
     if (leaf.action === 'todo') {
       deps.openTodo();
-      return;
-    }
-    if (leaf.action === 'set-display') {
-      const display = leaf.display;
-      if (!display) return;
-      console.info('[dsh-pet] 菜单切换显示位置 pet=' + petId + ' display=' + display);
-      void switchDisplay(deps, display);
       return;
     }
     if (leaf.action === 'home') {

@@ -28,7 +28,7 @@ export function registerBalanceCommand(deps: CommandBalanceInput): void {
         description: '手动触发桌宠余额显示（立即弹出余额气泡）',
         handler: () => {
           // 余额是全局一份数据，但「给谁看」要按宠物算：全都睡着就没人看，拒绝并回一句台词。
-          const visible = effectivePetList().filter((pet) => String(pet.display ?? '') !== 'none');
+          const visible = effectivePetList();
           if (visible.length > 0 && visible.every((pet) => sleep.sleeping(String(pet.id ?? '')))) {
             return { kind: 'error', text: sleepRefusalText(String(visible[0].id ?? '')) };
           }

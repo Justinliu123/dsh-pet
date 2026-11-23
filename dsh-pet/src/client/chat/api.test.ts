@@ -169,19 +169,18 @@ describe('playAction —— 重播动作走 /anim', () => {
     }
   }
 
-  test('POST /anim?pet=&surface=any，body 只带动作名', async () => {
+  test('POST /anim?pet=，body 只带动作名', async () => {
     const { calls, value } = await withFetch({ ok: true, playbackId: 'pb_1' }, () => playAction('main', '优雅女仆舞'));
     assert.deepEqual(
       calls.map((call) => call.url),
-      // surface 是 /anim 的必填项：缺了它宿主直接 400，按钮会表现为「点了没反应」
-      ['/dsh-pet-7340/anim?pet=main&surface=any'],
+      ['/dsh-pet-7340/anim?pet=main'],
     );
     assert.equal(calls[0]?.method, 'POST');
     assert.deepEqual(JSON.parse(String(calls[0]?.body)), { name: '优雅女仆舞' });
     assert.equal(value, true);
   });
 
-  test('宿主拒绝（名字不在池内 / 宠物没在显示）→ 返回 false，不抛错', async () => {
+  test('宿主拒绝（名字不在池内）→ 返回 false，不抛错', async () => {
     const { value } = await withFetch({ ok: false, reason: 'unknown-animation' }, () =>
       playAction('main', '不存在的动作'),
     );
