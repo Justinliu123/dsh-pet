@@ -102,6 +102,10 @@ export function saveUserConfig(
   // 前台聚焦时也提醒（全局布尔，与 notificationsEnabled 同语义）：传了必须是布尔，没传走透传保留
   const nwf = o.notifyWhenFocused;
   if (nwf !== undefined && typeof nwf !== 'boolean') return null;
+  // 系统通知转述（全局布尔，与上面几个开关同语义）：传了必须是布尔，没传走透传保留。
+  // 校验复用读取侧的 topFieldValid，读写同一份规则。
+  const sne = o.systemNotifyEnabled;
+  if (sne !== undefined && !topFieldValid('systemNotifyEnabled', sne)) return null;
   // 点击音效开关（全局布尔，与 notificationsEnabled 同语义）：传了必须是布尔，没传走透传保留
   const cse = o.clickSoundEnabled;
   if (cse !== undefined && typeof cse !== 'boolean') return null;
@@ -213,6 +217,7 @@ export function saveUserConfig(
   const outConfig: { pets: unknown[]; [key: string]: unknown } = { pets: out };
   if (ne !== undefined) outConfig.notificationsEnabled = ne;
   if (nwf !== undefined) outConfig.notifyWhenFocused = nwf;
+  if (sne !== undefined) outConfig.systemNotifyEnabled = sne;
   if (cse !== undefined) outConfig.clickSoundEnabled = cse;
   if (wie !== undefined) outConfig.whisperImageEnabled = wie;
   if (cie !== undefined) outConfig.chatImageEnabled = cie;
@@ -289,6 +294,7 @@ export function saveUserConfig(
   const bodyOwned = new Set(['pets']);
   if (ne !== undefined) bodyOwned.add('notificationsEnabled');
   if (nwf !== undefined) bodyOwned.add('notifyWhenFocused');
+  if (sne !== undefined) bodyOwned.add('systemNotifyEnabled');
   if (cse !== undefined) bodyOwned.add('clickSoundEnabled');
   if (wie !== undefined) bodyOwned.add('whisperImageEnabled');
   if (cie !== undefined) bodyOwned.add('chatImageEnabled');

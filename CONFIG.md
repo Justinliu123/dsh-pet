@@ -50,6 +50,7 @@ DSH 设置 → 「桌宠配置」：
 | `sleepRefuseTexts`     | **睡着被打扰时的拒绝台词**（条目级，随机挑一句）                                                                                | 非空字符串数组             |
 | `notificationsEnabled` | 系统通知总开关（布尔）                                                                                                          | 同 `notificationsEnabled`  |
 | `notifyWhenFocused`    | **前台聚焦时也提醒**：true = 页面可见且有焦点时照样弹通知、照样播报工作状态语音（布尔，默认 false）                             | 布尔，默认即可             |
+| `systemNotifyEnabled`  | **由桌宠转述系统通知**：true = 桌宠读系统通知中心，把其它应用弹的通知用气泡和语音念出来；DSH 的会话事件也由它说（布尔，默认 false） | 布尔，默认即可             |
 | `chatAnimationEnabled` | **对话动作联动**：开启后对话时把 `animations.categories` 下的动作清单交给模型，由它按语境挑一个当场表演（布尔，默认 true）      | 布尔，默认即可             |
 | `environmentCity`      | **天气城市覆盖**：留空 = 按出口 IP 自动定位；填城市名（如「扬州」）就按它查天气，不再走 IP 定位。只读 main 条目，填城市别填省份 | 字符串，默认 `""`          |
 

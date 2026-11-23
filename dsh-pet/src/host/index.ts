@@ -26,6 +26,7 @@ import { createPetLookup } from './plugin/pet-lookup.ts';
 import { createDownloadReport } from './plugin/download-report.ts';
 import { createWorkStatusBridge } from './plugin/work-status-bridge.ts';
 import { registerTodoReminders } from './plugin/todo-reminders.ts';
+import { registerSystemNotify } from './system-notify/loop.ts';
 import { DEEPSEEK_OFFICIAL_PROVIDER_ID } from './balance/providers/deepseek-official.ts';
 import { ensureDeepseekAsrProvider } from './voice/builtin-deepseek-asr.ts';
 import { ensureDeepseekTtsProvider } from './voice/builtin-deepseek-tts.ts';
@@ -281,6 +282,27 @@ export function apply(ctx: any): void {
     todos,
     waiterCount: () => state.waiterCount(),
   });
+
+  // 系统通知转述：她把系统里弹出来的通知读进来，用自己的声音说一遍（写 say 叶子，走现有说话通道）。
+  // 只在独立版里装：DSH 侧插件是纯数据通道，两边各生成一份文案、语音就会念两遍。
+  // 开关现读现用（配置里的 systemNotifyEnabled）：关着就什么都不做，连通知库都不开。
+  if (!dataChannelOnly) {
+    registerSystemNotify({
+      ctx,
+      effectivePetList,
+      isEnabled: () => readAllConfig(configPaths).main?.systemNotifyEnabled === true,
+      isLocked: (petId) => lock.locked(petId),
+      isSleeping: (petId) => sleep.sleeping(petId),
+      log,
+      readNotifyFrame: () => {
+        const leaf = state.read().sections.notify;
+        return leaf === undefined ? null : { counter: leaf.counter, data: leaf.data };
+      },
+      writeSay: (petId, text, duration, voiceTo) => {
+        state.writePet(petId, 'say', { text, duration, voiceTo });
+      },
+    });
+  }
 
   registerLifecycle({
     ctx,
