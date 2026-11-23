@@ -21,10 +21,10 @@
 > 不收紧密钥文件就会被拒绝加载（报 `Cannot securely load standalone AI settings.`）。
 > 手工修复用：`icacls <文件> /inheritance:r /grant:r *<你的SID>:F`。
 >
-> 开发注意：`node scripts/dist.mjs` 会清空 `win-unpacked`，**重新打包前先备份 `win-unpacked\data\`**，
-> 打完再放回去（或者用 `DSH_PET_OUTPUT_DIR` 换一个输出目录再合并）。
-> 用 `cp -r` 手工搬回去的文件会继承安装目录的宽 ACL，密钥文件同样会被拒绝加载，
-> 需要再收紧一次：`icacls <文件> /inheritance:r /remove:g *S-1-5-11 *S-1-5-32-545 /grant:r <用户名>:F`。
+> 开发注意：`node scripts/dist.mjs` 会重建 `win-unpacked`，便携数据目录 `data\` 会被一起删掉——
+> 脚本现在**打包前自动备份、打完自动放回**（临时目录中转，整份替换，并把密钥文件权限收紧到当前用户），
+> 配置、AI 密钥、账本与日志不会再丢。历史上手工 `cp -r` 搬回去的文件会继承安装目录的宽 ACL，
+> 密钥文件同样会被拒绝加载，需要再收紧一次：`icacls <文件> /inheritance:r /remove:g *S-1-5-11 *S-1-5-32-545 /grant:r <用户名>:F`。
 
 ## 两种形态
 
@@ -192,7 +192,7 @@ node scripts/dist.mjs         # 产出 <输出目录>/win-unpacked
 `E:\projects` 下的 `.asar`，用 `DSH_PET_OUTPUT_DIR` 换一个目录（例如 D 盘），再让
 `E:\projects\dsh-pet\app` junction 指过去即可，快捷方式不用改。
 打包前记得先退出正在运行的桌宠（`Get-Process dsh-pet | Stop-Process -Force`），否则 exe 被占用会报
-`EPERM: unlink … dsh-pet.exe`。
+`EPERM: unlink … dsh-pet.exe`。便携数据目录不用手工备份，脚本自己搬（见上文「绿色版」那段）。
 
 改完重新打包后，退出托盘里的桌宠再双击快捷方式即可（junction 路径不变）。
 只想快速验证逻辑、不打包时，可以直接跑独立模式：

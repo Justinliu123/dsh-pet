@@ -6,6 +6,7 @@
  * 不下载 Electron：默认只认本机已解压目录，找不到就明确失败，避免本地开发被静默拉走一百多兆；
  * 只有设了 DSH_PET_ALLOW_ELECTRON_DOWNLOAD=1 才交回 electron-builder 自行下载（CI 用）。
  * 打包二进制统一走 npmmirror 镜像，因为本机 github.com 不通。
+ * 便携数据目录（配置/密钥/账本/日志）在打包前后自动备份还原：重建解包目录会把它一起删掉。
  * @module dsh-pet/scripts/dist
  */
 import { spawn } from 'node:child_process';
@@ -13,6 +14,7 @@ import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { backupPortableData, discardPortableDataBackup, restorePortableData } from './dist-data.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '..');
@@ -91,9 +93,27 @@ if (electronDist) args.push(`--config.electronDist=${electronDist}`);
 // 需要把产物放到别的盘再让 E:\projects\dsh-pet\app 用 junction 指过来。
 const outputDir = process.env.DSH_PET_OUTPUT_DIR;
 if (outputDir) args.push(`--config.directories.output=${outputDir}`);
+// electron-builder 会重建解包目录，便携数据目录（配置/密钥/账本/日志）会被一起删掉：
+// 先备份到临时目录，打完原样放回去。相对路径按包目录解析，与 electron-builder 的 directories.output 一致。
+const unpackedDir = join(outputDir ? resolve(root, outputDir) : join(root, 'dist-app'), 'win-unpacked');
+const dataBackup = backupPortableData(unpackedDir);
+if (dataBackup) console.log(`[dist] 便携数据目录已备份 → ${dataBackup}`);
 const child = spawn(process.execPath, args, {
   cwd: root,
   env,
   stdio: 'inherit',
 });
-child.on('exit', (code) => process.exit(code ?? 0));
+child.on('exit', (code) => {
+  if (dataBackup) {
+    try {
+      restorePortableData(unpackedDir, dataBackup);
+      discardPortableDataBackup(dataBackup);
+      console.log('[dist] 便携数据目录已还原');
+    } catch (error) {
+      // 还原失败就留着备份：用户的配置与密钥不能丢
+      console.error(`[dist] 便携数据目录还原失败，备份保留在 ${dataBackup}：${String(error?.message ?? error)}`);
+      process.exit(1);
+    }
+  }
+  process.exit(code ?? 0);
+});
