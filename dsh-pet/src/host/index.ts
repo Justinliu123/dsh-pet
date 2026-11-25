@@ -99,7 +99,7 @@ export function apply(ctx: any): void {
     return typeof city === 'string' && city.trim() !== '' ? city.trim() : undefined;
   });
   const chatMemory = createChatMemory({ ctx, configPaths, log, memeDirsFor, playback, state, userRoot });
-  const { lastWhisperAt, publishWhisper, publishSleepTalk, chatWithPet, getActivePetId, setActivePetId } = chatMemory;
+  const { lastWhisperAt, publishWhisper, chatWithPet, getActivePetId, setActivePetId } = chatMemory;
 
   // 账户花费推导：DeepSeek 余额差 → 今日已用；余额刷新与气泡组装共用同一份账本。
   const spendTracker = createSpendTracker({ userRoot, log });
@@ -257,7 +257,6 @@ export function apply(ctx: any): void {
     lock,
     log,
     publishWhisper,
-    publishSleepTalk,
     refreshBalance,
     sleep,
     standaloneAiPolicy,

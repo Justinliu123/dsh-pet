@@ -28,7 +28,6 @@ function fakeInput(labels: string[], overrides: Partial<LoopsInput> = {}): Loops
     lock: { locked: () => false, acquire: () => true, release: () => {} },
     log: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
     publishWhisper: async () => {},
-    publishSleepTalk: async () => {},
     refreshBalance: async () => {},
     sleep: { sleeping: () => false, isSleeping: () => false },
     standaloneAiPolicy: () => ({ ready: true }),
@@ -38,16 +37,16 @@ function fakeInput(labels: string[], overrides: Partial<LoopsInput> = {}): Loops
 }
 
 describe('registerLoops —— 数据通道模式', () => {
-  test('独立版（不传 whisperDisabled）：余额、碎碎念、梦话三套循环都装', () => {
+  test('独立版（不传 whisperDisabled）：只装余额与碎碎念两套循环，不装梦话循环', () => {
     const labels: string[] = [];
     registerLoops(fakeInput(labels));
-    assert.deepEqual(labels, ['dsh-pet: balance poll', 'dsh-pet: whisper poll', 'dsh-pet: sleep talk poll']);
+    assert.deepEqual(labels, ['dsh-pet: balance poll', 'dsh-pet: whisper poll']);
   });
 
-  test('插件数据通道（whisperDisabled=true）：不装碎碎念，其余照旧', () => {
+  test('插件数据通道（whisperDisabled=true）：不装碎碎念，仅保留余额循环', () => {
     const labels: string[] = [];
     registerLoops(fakeInput(labels, { whisperDisabled: true }));
-    assert.deepEqual(labels, ['dsh-pet: balance poll', 'dsh-pet: sleep talk poll']);
+    assert.deepEqual(labels, ['dsh-pet: balance poll']);
     assert.equal(labels.includes('dsh-pet: whisper poll'), false, '数据通道不得注册碎碎念调度');
   });
 

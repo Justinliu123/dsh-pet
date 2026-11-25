@@ -468,7 +468,7 @@ function applyAnimLeaf(petId, leaf) {
   const hit = S.readAnim(leaf);
   if (!hit) return;
   for (const s of sprites) {
-    if (s.pet.id !== petId) continue;
+    if (s.pet.id !== petId || s.sleeping) continue;
     const explicitFacing = hit.facing !== undefined;
     if (explicitFacing) s.facing = hit.facing; // 必须在换源前：switchTo 里按它贴 scaleX(-1)
     if (hit.url !== undefined) s.playUrlOnce(hit.url, hit.playbackId);
@@ -482,7 +482,7 @@ function applyPositionLeaf(petId, leaf) {
   const hit = S.readPosition(leaf);
   if (!hit) return;
   for (const s of sprites) {
-    if (s.pet.id === petId) s.moveToCenter(hit.x, hit.y, hit.mode, hit.duration);
+    if (s.pet.id === petId && !s.sleeping) s.moveToCenter(hit.x, hit.y, hit.mode, hit.duration);
   }
 }
 
@@ -491,7 +491,7 @@ function applyThrowLeaf(petId, leaf) {
   const hit = S.readThrow(leaf);
   if (!hit) return;
   for (const s of sprites) {
-    if (s.pet.id === petId) s.throwWith(hit.angle, hit.power);
+    if (s.pet.id === petId && !s.sleeping) s.throwWith(hit.angle, hit.power);
   }
 }
 

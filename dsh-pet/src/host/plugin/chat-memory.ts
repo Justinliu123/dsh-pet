@@ -18,7 +18,6 @@ import { limitPool, matchMeme, pickMeme, readMemePool, type MemeEntry } from '..
 import { generateWhisper } from '../whisper.ts';
 import { createMemoryOrphans } from './memory-orphans.ts';
 import { configuredModel } from '../model-selection.ts';
-import { SLEEP_TALK_INSTRUCTION } from '../whisper.ts';
 import { VOICE_TARGET } from '../voice-target.ts';
 import type { HostSetup } from './setup.ts';
 import type { HostContext } from './context.ts';
@@ -288,34 +287,6 @@ export function createChatMemory(deps: ChatMemoryInput) {
     return { ok: true, text: result.text, ...(result.image ? { image: result.image } : {}) };
   };
 
-  /** 生成并写一句梦话：system 只用人设，功能指令在 whisper（与碎碎念同属代码常量）；不配图、不念、不换动画。
-   *  睡着时「换动画」本身就是打扰，所以写 `say` 显式 `anim: false`，也不写 `voiceTo`。
-   *  @returns 是否真的生成并写进了 S；失败只留一行日志，调度下一拍再试。 */
-  const publishSleepTalk = async (petId: string): Promise<boolean> => {
-    const cfg = readAllConfig(configPaths);
-    const found = findPetInstance(cfg, petId);
-    if (!found) return false;
-    const system = petSystemPrompt(found, { env: await currentEnvironment() });
-    const result = await generateWhisper(ctx, {
-      system,
-      preferred: configuredModel(found.conf, 'whisperModel'),
-      instruction: SLEEP_TALK_INSTRUCTION,
-    });
-    if (!result.ok) {
-      log.warn(
-        '[dsh-pet] 梦话生成失败 pet=' +
-          petId +
-          ' reason=' +
-          result.reason +
-          (result.message ? ' ' + result.message : ''),
-      );
-      return false;
-    }
-    state.writePet(petId, 'say', { text: result.text, anim: false });
-    log.info(`[dsh-pet] 梦话生成成功 pet=${petId}，${result.text.length} 字`);
-    return true;
-  };
-
   /** 读本轮上下文：配置、配图池、动作名、最近历史与人设。宠物不存在时返回 `null`。 */
   const readContext = async (petId: string, env: EnvironmentFacts): Promise<ChatContext | null> => {
     const cfg = readAllConfig(configPaths);
@@ -576,7 +547,6 @@ export function createChatMemory(deps: ChatMemoryInput) {
     readMemory,
     memoryRounds,
     publishWhisper,
-    publishSleepTalk,
     chatWithPet,
     deleteHistory,
     orphanHistory,

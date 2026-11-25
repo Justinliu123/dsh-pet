@@ -193,6 +193,8 @@ export function createCueEffects(rt: CueEffectsRuntime) {
       const card = hub.card;
       if (!animCue || animCue.seq === prevAnimRef.current) return;
       prevAnimRef.current = animCue.seq;
+      // 睡觉期间忽略点播动画，不打断睡姿。
+      if (hub.sleeping()) return;
       // facing 必须在换源前落地，并同步镜像 ref：换源在 onReady 里读它。
       // 未传 facing 时保持当前朝向，不回落 left。
       const explicitFacing = animCue.facing !== undefined;
@@ -220,6 +222,7 @@ export function createCueEffects(rt: CueEffectsRuntime) {
     const consumePosCue = (): void => {
       if (!posCue || posCue.seq === prevPosRef.current) return;
       prevPosRef.current = posCue.seq;
+      if (hub.sleeping()) return;
       hub.posFollow.apply(posCue.x, posCue.y, posCue.mode, posCue.duration);
     };
 
@@ -227,6 +230,7 @@ export function createCueEffects(rt: CueEffectsRuntime) {
     const consumeThrowCue = (): void => {
       if (!throwCue || throwCue.seq === prevThrowRef.current) return;
       prevThrowRef.current = throwCue.seq;
+      if (hub.sleeping()) return;
       hub.applyThrow(throwCue.angle, throwCue.power);
     };
 
