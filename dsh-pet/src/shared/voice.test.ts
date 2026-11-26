@@ -13,6 +13,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
+  NOTICE_QUEUE_MAX,
   PLAYBACK_WAIT_MAX_MS,
   getVoiceState,
   playSayVoice,
@@ -528,6 +529,149 @@ describe('speakNotice —— 通知类播报允许后台出声', () => {
       speakNotice('');
       await flush();
       assert.equal(fetchStub.calls.length, 0, '空串没有可念的内容');
+    } finally {
+      browser.restore();
+      fetchStub.restore();
+    }
+  });
+
+  test('连续通知排队播报：新通知不打断当前通知，播完再念下一条', async () => {
+    const fetchStub = stubFetch();
+    const browser = stubBrowser({ autoEnd: false });
+    try {
+      setSurface('web');
+      setVoiceConfig('', 1);
+      speakNotice('通知一');
+      await flush();
+      speakNotice('通知二');
+      await flush();
+      assert.deepEqual(fetchStub.calls, [{ text: '通知一' }], '第一条没播完前，不该抢先合成或播放第二条');
+      assert.equal(browser.audios.length, 1);
+      assert.equal(browser.audios[0].paused, false, '第一条必须完整播完，不能被第二条掐断');
+
+      browser.audios[0].fire('ended');
+      await flush();
+      assert.deepEqual(fetchStub.calls, [{ text: '通知一' }, { text: '通知二' }], '第一条播完后自动播第二条');
+      assert.equal(browser.audios.length, 2);
+
+      browser.audios[1].fire('ended');
+      await flush();
+    } finally {
+      browser.restore();
+      fetchStub.restore();
+    }
+  });
+
+  test('待播队列超限时丢弃最旧、保留最新（上限 NOTICE_QUEUE_MAX）', async () => {
+    const fetchStub = stubFetch();
+    const browser = stubBrowser({ autoEnd: false });
+    try {
+      setSurface('web');
+      setVoiceConfig('', 1);
+      assert.equal(NOTICE_QUEUE_MAX, 3);
+      // 第 1 条立即开播，第 2–6 条依次涌入待播队列（上限 3 条）：应丢弃通知二、通知三，保留四、五、六
+      speakNotice('通知一');
+      await flush();
+      speakNotice('通知二');
+      speakNotice('通知三');
+      speakNotice('通知四');
+      speakNotice('通知五');
+      speakNotice('通知六');
+      await flush();
+
+      assert.deepEqual(fetchStub.calls, [{ text: '通知一' }], '正在播第一条时其余在排队');
+      assert.equal(browser.audios[0].paused, false, '正在播的通知不能被打断');
+
+      for (let i = 0; i < 4; i++) {
+        browser.audios[i].fire('ended');
+        await flush();
+      }
+      assert.deepEqual(
+        fetchStub.calls.map((c) => c.text),
+        ['通知一', '通知四', '通知五', '通知六'],
+        '超出待播上限后应丢弃最旧的待播通知，保留最新的通知',
+      );
+      assert.equal(browser.audios.length, 4);
+    } finally {
+      browser.restore();
+      fetchStub.restore();
+    }
+  });
+
+  test('前一条通知合成失败后不阻塞队列，继续播下一条', async () => {
+    const fetchStub = stubFetch({ hold: true });
+    const browser = stubBrowser();
+    try {
+      setSurface('web');
+      setVoiceConfig('', 1);
+      speakNotice('会失败的通知');
+      await flush();
+      speakNotice('后续通知');
+      await flush();
+
+      assert.equal(fetchStub.pending.length, 1);
+      fetchStub.pending[0].reject();
+      await flush();
+      assert.equal(fetchStub.pending.length, 2, '前一条失败后应继续拉起下一条');
+      fetchStub.pending[1].resolve();
+      await flush();
+      assert.deepEqual(
+        fetchStub.calls.map((c) => c.text),
+        ['会失败的通知', '后续通知'],
+      );
+      assert.equal(browser.audios.length, 1, '后续通知应正常开播');
+    } finally {
+      browser.restore();
+      fetchStub.restore();
+    }
+  });
+
+  test('通知优先：通知播报期间气泡自言自语不打断，且不触发气泡 utterance 事件', async () => {
+    const events: VoiceUtteranceEvent[] = [];
+    const fetchStub = stubFetch();
+    const browser = stubBrowser({ autoEnd: false });
+    const off = subscribeVoiceUtterance((event) => events.push(event));
+    try {
+      setSurface('web');
+      setVoiceConfig('', 1);
+      speakNotice('重要通知');
+      await flush();
+      playSayVoice({ text: '气泡碎碎念', voiceTo: 'web' });
+      await flush();
+
+      assert.deepEqual(fetchStub.calls, [{ text: '重要通知' }], '通知播报期间气泡自言自语不该发合成请求');
+      assert.equal(browser.audios.length, 1);
+      assert.equal(browser.audios[0].paused, false, '通知不能被气泡自言自语掐断');
+      assert.equal(events.length, 0, '通知不触发气泡的 utterance 事件');
+
+      browser.audios[0].fire('ended');
+      await flush();
+    } finally {
+      off();
+      browser.restore();
+      fetchStub.restore();
+    }
+  });
+
+  test('通知开始播时会先静音正在响的气泡自言自语，避免叠音', async () => {
+    const fetchStub = stubFetch();
+    const browser = stubBrowser({ autoEnd: false });
+    try {
+      setSurface('web');
+      setVoiceConfig('', 1);
+      playSayVoice({ text: '正在碎碎念', voiceTo: 'web' });
+      await flush();
+      assert.equal(browser.audios.length, 1);
+      assert.equal(browser.audios[0].paused, false);
+
+      speakNotice('紧急通知');
+      await flush();
+      assert.equal(browser.audios[0].paused, true, '通知接管时应先掐掉气泡语音');
+      assert.equal(browser.audios.length, 2);
+      assert.equal(browser.audios[1].paused, false, '通知音频正常播放');
+
+      browser.audios[1].fire('ended');
+      await flush();
     } finally {
       browser.restore();
       fetchStub.restore();

@@ -60,6 +60,9 @@ const SPEAK_TIMEOUT_MS = 30_000;
  */
 export const PLAYBACK_WAIT_MAX_MS = 60_000;
 
+/** 通知待播队列上限（不含当前正在播的那一条）；满队时丢弃最旧的待播通知，保留最新通知。 */
+export const NOTICE_QUEUE_MAX = 3;
+
 /** 合成请求的超时信号；自动播报与手动点播共用同一份口径。 */
 function speakSignal(): AbortSignal {
   return AbortSignal.timeout(SPEAK_TIMEOUT_MS);
@@ -197,6 +200,11 @@ export function playSayVoice(say: { readonly text: string; readonly voiceTo?: Vo
     setVoiceState('idle');
     return;
   }
+  // 通知优先：通知正在播报或排队期间，气泡自言自语不抢占也不打断。
+  if (noticeDraining) {
+    setVoiceState('idle');
+    return;
+  }
   void speakWhenReady(say.text); // 不 await：播放是旁路，不能挡住气泡与动画
 }
 
@@ -204,33 +212,89 @@ export function playSayVoice(say: { readonly text: string; readonly voiceTo?: Vo
  * 配置就绪后开播；桌面端首次调用会顺手拉一次 `/config`。
  *
  * @param text - 要念的整句。
- * @param canPlayHidden - 页面隐藏时是否继续播；缺省 `false`（藏起来就静音）。
  */
-async function speakWhenReady(text: string, canPlayHidden = false): Promise<void> {
+async function speakWhenReady(text: string): Promise<void> {
   await loadConfigOnce();
+  if (noticeDraining) {
+    setVoiceState('idle');
+    return;
+  }
   const seq = ++utteranceSeq;
   // 先报开始再置 loading：气泡要靠这条事件挂起收起计时，晚一步它就可能已经收了。
   emitUtterance({ kind: 'start', seq, text });
   setVoiceState('loading');
   try {
-    await speak(text, canPlayHidden);
+    await speak(text);
   } finally {
     // 成功、失败、超时都走这里：气泡在等这个收尾，漏一次就永远挂着。
     emitUtterance({ kind: 'end', seq, text });
   }
 }
 
+/** 待播通知队列（不含当前正在播的那一条）。 */
+const noticeQueue: string[] = [];
+/** 当前是否有通知正在合成或播放；为 true 时新通知入队等待，且气泡自言自语不打断。 */
+let noticeDraining = false;
+
 /**
  * 念一句与气泡无关的系统提示（工作状态播报）。
  *
- * 念不念由调用方判定。与其它自动播报共用同一个单槽——后一句掐掉前一句。
+ * 念不念由调用方判定。通知按先后顺序排队播报，不打断当前正在读的通知；
+ * 待播数量达到 {@link NOTICE_QUEUE_MAX} 时丢弃队列中最旧的待播项，将新通知插入队尾。
  *
  * @param text - 要念的整句；空串直接跳过。
  */
 export function speakNotice(text: string): void {
   if (text === '') return;
-  // 允许后台播：用户正在别的应用里，正是需要它出声的时候。
-  void speakWhenReady(text, true);
+  if (noticeDraining) {
+    if (noticeQueue.length >= NOTICE_QUEUE_MAX) noticeQueue.shift();
+    noticeQueue.push(text);
+    return;
+  }
+  noticeDraining = true;
+  void drainNoticeQueue(text);
+}
+
+/** 串行消费通知队列；每条播完（或失败/超时）后再取下一条。 */
+async function drainNoticeQueue(first: string): Promise<void> {
+  try {
+    await loadConfigOnce();
+    let current: string | undefined = first;
+    while (current !== undefined) {
+      // 掐掉正在合成或播放的气泡自言自语，避免与通知叠音。
+      ++autoSeq;
+      stopAutoAudio();
+      await playOneNotice(current);
+      current = noticeQueue.shift();
+    }
+  } finally {
+    noticeDraining = false;
+  }
+}
+
+/** 合成并播放单条通知；允许后台出声，单条失败或超时静默收尾以免卡住后续队列。 */
+async function playOneNotice(text: string): Promise<void> {
+  try {
+    const response = await fetch(voiceBase + '/voice/speak', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ text, ...(voiceName ? { voice: voiceName } : {}) }),
+      signal: speakSignal(),
+    });
+    if (!response.ok || !(response.headers.get('content-type') ?? '').includes('audio')) return;
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const audio = new Audio(objectUrl);
+    audio.volume = voiceVolume;
+    try {
+      await audio.play();
+    } catch {
+      URL.revokeObjectURL(objectUrl);
+      return;
+    }
+    await waitForPlaybackEnd(audio, objectUrl);
+  } catch {
+    /* 合成失败、网络异常或超时：不中断队列，继续播下一条通知 */
+  }
 }
 
 /**
@@ -266,9 +330,6 @@ let autoAudio: HTMLAudioElement | null = null;
 /** 自动播报世代号：合成期间可能被更新的一句顶掉，回来的旧结果直接丢弃。 */
 let autoSeq = 0;
 
-/** 当前这句是否允许页面隐藏时继续播；跟随 autoAudio 一起换，不做成全局开关。 */
-let autoAudioCanPlayHidden = false;
-
 /**
  * 掐掉当前自动播报。
  *
@@ -277,9 +338,7 @@ let autoAudioCanPlayHidden = false;
  */
 function stopAutoAudio(): void {
   const audio = autoAudio;
-  // 标记无条件清掉：没有音频时也要清，否则下一句会被上一句的许可值带偏。
   autoAudio = null;
-  autoAudioCanPlayHidden = false;
   if (audio === null) return;
   try {
     audio.pause();
@@ -288,10 +347,10 @@ function stopAutoAudio(): void {
   }
 }
 
-// 页面被藏起来（切后台 / 息屏）就静音：回来时不补播。通知类播报自带后台许可，不受这条影响。
+// 页面被藏起来（切后台 / 息屏）就静音气泡语音：回来时不补播。通知类走独立队列，不受这条影响。
 if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && !autoAudioCanPlayHidden) stopAutoAudio();
+    if (document.hidden) stopAutoAudio();
   });
 }
 
@@ -299,9 +358,8 @@ if (typeof document !== 'undefined' && typeof document.addEventListener === 'fun
  * 请求合成并播放；任何一步失败都落到 `failed`（气泡上留一个静音喇叭，而不是干脆没图标）。
  *
  * @param text - 要念的整句。
- * @param canPlayHidden - 页面隐藏时是否继续播；缺省 `false`。
  */
-async function speak(text: string, canPlayHidden = false): Promise<void> {
+async function speak(text: string): Promise<void> {
   const token = ++autoSeq;
   stopAutoAudio();
   try {
@@ -323,24 +381,20 @@ async function speak(text: string, canPlayHidden = false): Promise<void> {
     }
     const audio = new Audio(objectUrl);
     audio.volume = voiceVolume;
-    // 合成期间页面被藏起来：这一句不补播，直接丢掉——除非这句自带后台许可（通知类）。
-    if (!canPlayHidden && typeof document !== 'undefined' && document.hidden) {
+    // 合成期间页面被藏起来：这一句不补播，直接丢掉。
+    if (typeof document !== 'undefined' && document.hidden) {
       URL.revokeObjectURL(objectUrl);
       setVoiceState('idle');
       return;
     }
     // 音频就绪即置 ready：喇叭表示「这句有语音」，不跟播放进度绑定
     setVoiceState('ready');
-    autoAudioCanPlayHidden = canPlayHidden;
     autoAudio = audio;
     try {
       await audio.play(); // 只代表开播：开播就失败要落到 failed，也不必再等收尾
     } catch {
       URL.revokeObjectURL(objectUrl);
-      if (autoAudio === audio) {
-        autoAudio = null;
-        autoAudioCanPlayHidden = false;
-      }
+      if (autoAudio === audio) autoAudio = null;
       setVoiceState('failed');
       return;
     }
