@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import {
   NOTICE_QUEUE_MAX,
   PLAYBACK_WAIT_MAX_MS,
+  createQueuedSayTracker,
   getVoiceState,
   playSayVoice,
   setSurface,
@@ -676,5 +677,53 @@ describe('speakNotice —— 通知类播报允许后台出声', () => {
       browser.restore();
       fetchStub.restore();
     }
+  });
+});
+
+describe('createQueuedSayTracker —— 独立桌宠系统通知排队控制器', () => {
+  test('空闲时立即返回开播；播报中入队等待，播完依次推进', () => {
+    const tracker = createQueuedSayTracker<{ text: string }>(3);
+    assert.equal(tracker.isBusy(), false);
+    assert.deepEqual(tracker.enqueue({ text: '通知一' }), { text: '通知一' });
+    assert.equal(tracker.isBusy(), true);
+    assert.equal(tracker.enqueue({ text: '通知二' }), null);
+    assert.equal(tracker.enqueue({ text: '通知三' }), null);
+
+    // 文本不匹配不推进
+    assert.equal(tracker.complete('无关句子'), null);
+    assert.equal(tracker.isBusy(), true);
+
+    assert.deepEqual(tracker.complete('通知一'), { text: '通知二' });
+    assert.deepEqual(tracker.complete('通知二'), { text: '通知三' });
+    assert.equal(tracker.complete('通知三'), null);
+    assert.equal(tracker.isBusy(), false);
+  });
+
+  test('待播队列超上限时丢弃最旧、保留最新', () => {
+    const tracker = createQueuedSayTracker<{ text: string }>(3);
+    assert.deepEqual(tracker.enqueue({ text: '一' }), { text: '一' });
+    tracker.enqueue({ text: '二' });
+    tracker.enqueue({ text: '三' });
+    tracker.enqueue({ text: '四' });
+    tracker.enqueue({ text: '五' });
+    tracker.enqueue({ text: '六' });
+
+    const played: string[] = [];
+    let cur: { text: string } | null = { text: '一' };
+    while (cur !== null) {
+      played.push(cur.text);
+      cur = tracker.complete(cur.text);
+    }
+    assert.deepEqual(played, ['一', '四', '五', '六']);
+  });
+
+  test('clear 清空当前项与待播队列', () => {
+    const tracker = createQueuedSayTracker<{ text: string }>(3);
+    tracker.enqueue({ text: '一' });
+    tracker.enqueue({ text: '二' });
+    tracker.clear();
+    assert.equal(tracker.isBusy(), false);
+    assert.equal(tracker.complete('一'), null);
+    assert.deepEqual(tracker.enqueue({ text: '新通知' }), { text: '新通知' });
   });
 });

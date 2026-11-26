@@ -63,6 +63,57 @@ export const PLAYBACK_WAIT_MAX_MS = 60_000;
 /** 通知待播队列上限（不含当前正在播的那一条）；满队时丢弃最旧的待播通知，保留最新通知。 */
 export const NOTICE_QUEUE_MAX = 3;
 
+/** 有界排队播报控制器：供消费端对标记 `queued` 的说话叶子串行播报。 */
+export interface QueuedSayTracker<T extends { readonly text: string }> {
+  /** 入队一条通知；空闲时立即返回该项开播，播报中则入队等待（满队丢最旧）并返回 null。 */
+  enqueue(item: T): T | null;
+  /** 当前播报项收尾时推进队列；文本匹配当前项才推进，返回下一条待播项或 null。 */
+  complete(text: string): T | null;
+  /** 当前是否正在播报队列中的通知。 */
+  isBusy(): boolean;
+  /** 清空当前项与所有待播项。 */
+  clear(): void;
+}
+
+/**
+ * 创建有界排队播报控制器。
+ *
+ * @param maxPending - 待播队列上限（不含当前正在播的那一条）；默认 {@link NOTICE_QUEUE_MAX}。
+ * @returns 排队控制器实例。
+ */
+export function createQueuedSayTracker<T extends { readonly text: string }>(
+  maxPending: number = NOTICE_QUEUE_MAX,
+): QueuedSayTracker<T> {
+  const limit = Math.max(0, Math.floor(maxPending));
+  let active: T | null = null;
+  const pending: T[] = [];
+  return {
+    enqueue(item: T): T | null {
+      if (active === null) {
+        active = item;
+        return item;
+      }
+      if (limit > 0) {
+        if (pending.length >= limit) pending.shift();
+        pending.push(item);
+      }
+      return null;
+    },
+    complete(text: string): T | null {
+      if (active === null || active.text !== text) return null;
+      active = pending.shift() ?? null;
+      return active;
+    },
+    isBusy(): boolean {
+      return active !== null;
+    },
+    clear(): void {
+      active = null;
+      pending.length = 0;
+    },
+  };
+}
+
 /** 合成请求的超时信号；自动播报与手动点播共用同一份口径。 */
 function speakSignal(): AbortSignal {
   return AbortSignal.timeout(SPEAK_TIMEOUT_MS);

@@ -433,21 +433,47 @@ function applyEnvLeaf(leaf) {
   for (const s of sprites) s.showEnvNow(state);
 }
 
+/** 每只宠物的系统通知排队控制器：保证上一条通知读完再弹并读下一条。 */
+const queuedSaysByPet = new Map();
+
+function getQueuedSayTracker(petId) {
+  let tracker = queuedSaysByPet.get(petId);
+  if (!tracker) {
+    tracker = S.createQueuedSayTracker();
+    queuedSaysByPet.set(petId, tracker);
+  }
+  return tracker;
+}
+
+/** 真正呈现一条说话叶子：弹气泡 + 触发语音。 */
+function presentSay(sprite, said) {
+  sprite.showWhisper(said.text, said.image, said.url, said.duration, said.anim);
+  // 两端各判各的：叶子点名 desktop 才念，没点名或点了网页端就只弹气泡。
+  S.playSayVoice(said);
+}
+
 /** 说话叶子 → 对应宠物播说话动画 + 气泡。`kind: 'clear'` = 收起气泡，其余 = 弹一个气泡。 */
 function applySayLeaf(petId, leaf) {
   const said = S.readSay(leaf);
   if (!said) return;
+  const tracker = getQueuedSayTracker(petId);
   for (const s of sprites) {
     if (s.pet.id !== petId) continue;
     if (said.kind === 'clear') {
+      tracker.clear();
       s.clearWhisper();
       continue;
     }
-    s.showWhisper(said.text, said.image, said.url, said.duration, said.anim);
-    // 两端各判各的：叶子点名 desktop 才念，没点名或点了网页端就只弹气泡。
     // 必须留在按 petId 过滤的循环里：每个窗口都收到全部叶子（全局计数器唤醒所有窗口），
     // 放到循环外会让没装这只宠物的窗口跟着一起念，N 只桌面宠物就是 N 份语音。
-    S.playSayVoice(said);
+    if (said.queued && said.voiceTo === 'desktop') {
+      const next = tracker.enqueue(said);
+      if (next) presentSay(s, next);
+      continue;
+    }
+    // 通知优先：系统通知正在播报期间，普通碎碎念不打断当前通知。
+    if (tracker.isBusy()) continue;
+    presentSay(s, said);
   }
 }
 
@@ -607,7 +633,13 @@ function startLoops() {
   S.subscribeVoiceUtterance((event) => {
     // 状态机只认 hold/release，语音给的是 start/end：翻译与网页端共用同一份，别再各写一遍。
     const hold = S.utteranceToHold(event);
-    for (const s of sprites) if (s.whisperText === event.text) s.applyWhisperHold(hold);
+    for (const s of sprites) {
+      if (s.whisperText === event.text) s.applyWhisperHold(hold);
+      if (event.kind === 'end') {
+        const next = getQueuedSayTracker(s.pet.id).complete(event.text);
+        if (next) presentSay(s, next);
+      }
+    }
   });
 
   // 统一轮询是自调度的长轮询（请求 → 处理 → 立刻再请求）：宿主在版本没变时挂起，空闲时

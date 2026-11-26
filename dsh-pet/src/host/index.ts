@@ -298,7 +298,7 @@ export function apply(ctx: any): void {
         return leaf === undefined ? null : { counter: leaf.counter, data: leaf.data };
       },
       writeSay: (petId, text, duration, voiceTo) => {
-        state.writePet(petId, 'say', { text, duration, voiceTo });
+        state.writePet(petId, 'say', { text, duration, voiceTo, queued: true });
       },
     });
   }

@@ -26,7 +26,7 @@ export const POLL_INTERVAL_MS = 3000;
 export const BUBBLE_DURATION_MS = 15000;
 
 /** 待转述队列上限（条）：攒太多就丢最旧的——她念的是「刚发生的」，积压的历史没有意义。 */
-export const MAX_PENDING = 20;
+export const MAX_PENDING = 3;
 
 /** 承担这次转述的宠物。 */
 export interface RelaySpeaker {

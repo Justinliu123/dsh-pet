@@ -190,6 +190,8 @@ export type SayCue =
       duration?: number;
       anim?: boolean;
       voiceTo?: VoiceTarget;
+      /** 是否按通知队列串行播报（不打断上一条正在读的通知）；缺省按即时覆盖处理。 */
+      queued?: boolean;
     }
   | { kind: 'clear' };
 
@@ -208,6 +210,7 @@ export function readSay(leaf: StateLeaf): SayCue | null {
     duration?: unknown;
     anim?: unknown;
     voiceTo?: unknown;
+    queued?: unknown;
     clear?: unknown;
   };
   // 清空指令优先：它不带 text，所以必须排在文本校验前面
@@ -225,6 +228,7 @@ export function readSay(leaf: StateLeaf): SayCue | null {
     anim: typeof d.anim === 'boolean' ? d.anim : undefined,
     // 只认两个合法字面量：写错的一端名等于「不指定」，消费端据此不念
     voiceTo: d.voiceTo === 'web' || d.voiceTo === 'desktop' ? d.voiceTo : undefined,
+    ...(d.queued === true ? { queued: true } : {}),
   };
 }
 
